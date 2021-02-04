@@ -12,17 +12,17 @@ Last changed: 04.02.2021
 
 
 ## BUILD ##
-```batch
+```bash
 $devcmd> msbuild talk.vcxproj /p:Platform=x64 /p:Configuration=Release
 ```
 
 **other optinos**
-```batch
+```bash
 $devcmd> msbuild [talk.vcxproj] [/p:Platform=x86|x64] [/p:Configuration=Debug|Release] [/p:RunTimeLib=Debug|Release] [/p:PDB=No]
 ```
 
 ## USAGE ##
-```batch
+```bash
 $ Talk.exe /n DeviceName [/c ioctl] [/i InputBufferSize] [/o OutputBufferSize] [/d aabbcc] [/c ioctl] [/s SleepDuration] [/t] [/h]
 ```
 

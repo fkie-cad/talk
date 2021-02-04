@@ -3,11 +3,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "talk.h"
-
-
-#define PARAM_IDENTIFIER '/'
 #define MAX_BUFFER_LN (0x100)
+
+#include "talk.h"
+#include "Converter.h"
+#include "Args.h"
+
+
 
 #define VERSION "2.0.1"
 #define LAST_CHANGED "04.02.2021"
@@ -28,9 +30,7 @@ typedef struct CmdParams {
 
 BOOL parseArgs(INT argc, CHAR** argv, CmdParams* params);
 BOOL checkArgs(CmdParams* params);
-BOOL isAskForHelp(INT argc, CHAR** argv);
-BOOL isArgOfType(const CHAR* arg, const CHAR* type);
-BOOL hasValue(const char* type, int i, int end_i);
+void printArgs(PCmdParams params);
 
 void printUsage();
 void printHelp();
@@ -39,41 +39,12 @@ int openDevice(PHANDLE device, CHAR* name);
 int generateIoRequest(HANDLE device, PCmdParams params);
 void printStatus(NTSTATUS status);
 
-ULONG parsePlainBytes(const char* raw, BYTE** buffer, ULONG size);
-int parseUint8(const char* arg, BYTE* value, BYTE base);
-int parseUint64(const char* arg, ULONGLONG* value, BYTE base);
 
-int isCallForHelp(char * arg1)
-{
-    return arg1[0] == '/' && (arg1[1] == 'h' || arg1[1] == '?' ) && arg1[2] == 0;
-}
-
-void printUsage()
-{
-    printf("Usage: Talk.exe /n DeviceName [/c ioctl] [/i InputBufferSize] [/o OutputBufferSize] [/d aabbcc] [/s SleepDuration] [/t] [/h]\n");
-    printf("Version: %s\n", VERSION);
-    printf("Last changed: %s\n", LAST_CHANGED);
-}
-
-void printHelp()
-{
-    printUsage();
-    printf("\n");
-    printf("Options:\n");
-    printf(" - /n DeviceName to call.\n");
-    printf(" - /c The desired IOCTL.\n");
-    printf(" - /i InputBufferSize possible size of InputBuffer.\n");
-    printf(" - /o OutputBufferSize possible size of OutputBuffer.\n");
-    printf(" - /d InputBuffer data in hex.\n");
-    printf(" - /s Duration of sleep after call\n");
-    printf(" - /t Just test the device for accessibility. Don't send data.\n");
-}
 
 int _cdecl main(int argc, char** argv)
 {
     HANDLE device = INVALID_HANDLE_VALUE;
     CmdParams params;
-    ULONG i;
     BOOL s;
 
     if ( isAskForHelp(argc, argv) )
@@ -94,20 +65,8 @@ int _cdecl main(int argc, char** argv)
     }
 
     
-    printf("params:\n");
-    printf(" - DeviceName: %s\n", params.DeviceName);
-    printf(" - InputBufferSize: 0x%x\n", params.InputBufferSize);
-    printf(" - OutputBufferSize: 0x%x\n", params.OutputBufferSize);
-    printf(" - IOCTL: 0x%x\n", params.IOCTL);
-    if ( params.InputBufferData )
-    {
-        printf(" - InputBufferData: ");
-        for ( i = 0; i < params.InputBufferSize; i++ ) printf("%02x ", params.InputBufferData[i]);
-        printf("\n");
-    }
-    printf(" - Sleep: 0x%x\n", params.Sleep);
-    printf(" - TestHandle: %u\n", params.TestHandle);
-    printf("\n");
+    printArgs(&params);
+
 
     s = openDevice(&device, params.DeviceName);
     if ( s != 0 )
@@ -417,26 +376,6 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* params)
     return !error;
 }
 
-BOOL isAskForHelp(INT argc, CHAR** argv)
-{
-    int i = 1;
-    if ( argc < i+1 )
-        return FALSE;
-
-    return isArgOfType(argv[i], "h") || isArgOfType(argv[i], "?");
-}
-
-BOOL isArgOfType(const CHAR* arg, const CHAR* type)
-{
-    size_t type_ln;
-
-    type_ln = strlen(type);
-
-    return arg[0] == PARAM_IDENTIFIER && 
-        strnlen(&arg[1], 10) == type_ln && 
-        strncmp(&arg[1], type, type_ln) == 0;
-}
-
 BOOL checkArgs(CmdParams* params)
 {
     if ( params->DeviceName == NULL )
@@ -445,116 +384,48 @@ BOOL checkArgs(CmdParams* params)
     return TRUE;
 }
 
-BOOL hasValue(const char* type, int i, int last_i)
+void printArgs(PCmdParams params)
 {
-    if ( i >= last_i )
+    SIZE_T i;
+
+    printf("params:\n");
+    printf(" - DeviceName: %s\n", params->DeviceName);
+    printf(" - InputBufferSize: 0x%x\n", params->InputBufferSize);
+    printf(" - OutputBufferSize: 0x%x\n", params->OutputBufferSize);
+    printf(" - IOCTL: 0x%x\n", params->IOCTL);
+    if ( params->InputBufferData )
     {
-        printf("INFO: Arg \"%c%s\" has no value! Skipped!\n", PARAM_IDENTIFIER, type);
-        return FALSE;
+        printf(" - InputBufferData: ");
+        for ( i = 0; i < params->InputBufferSize; i++ ) printf("%02x ", params->InputBufferData[i]);
+        printf("\n");
     }
-
-    return TRUE;
+    printf(" - Sleep: 0x%x\n", params->Sleep);
+    printf(" - TestHandle: %u\n", params->TestHandle);
+    printf("\n");
 }
 
-ULONG parsePlainBytes(const char* raw, BYTE** buffer, ULONG size)
+int isCallForHelp(char * arg1)
 {
-	ULONG i, j;
-	SIZE_T arg_ln = strnlen(raw, MAX_BUFFER_LN);
-	BYTE* p;
-	char byte[3] = {0};
-	ULONG buffer_ln;
-	int s = 0;
-    
-	buffer_ln = (ULONG) (arg_ln / 2);
-
-	if ( arg_ln % 2 != 0 || arg_ln == 0 )
-	{
-		printf("Error: Buffer data is not byte aligned!\n");
-		return 0;
-	}
-
-	if ( buffer_ln != size )
-	{
-		printf("Error: Buffer data has the wrong size %zu != %u!\n", arg_ln, size);
-		return 0;
-	}
-
-	p = (BYTE*) malloc(arg_ln/2);
-	if ( p == NULL )
-	{
-		printf("ERROR (0x%08x): Allocating memory failed!\n", GetLastError());
-		return 0;
-	}
-
-	for ( i = 0, j = 0; i < arg_ln; i += 2 )
-	{
-		byte[0] = raw[i];
-		byte[1] = raw[i + 1];
-
-		 s = parseUint8(byte, &p[j++], 16);
-		 if ( s != 0 )
-		 {
-		 	free(p);
-		 	return 0;
-		 }
-	}
-    
-	*buffer = p;
-	return buffer_ln;
+    return arg1[0] == '/' && (arg1[1] == 'h' || arg1[1] == '?' ) && arg1[2] == 0;
 }
 
-int parseUint8(const char* arg, BYTE* value, BYTE base)
+void printUsage()
 {
-	ULONGLONG result;
-	int s = parseUint64(arg, &result, base);
-	if ( s != 0 ) return s;
-	if ( s > (BYTE)-1 )
-	{
-		fprintf(stderr, "Error: %s could not be converted to a byte: Out of range!\n", arg);
-		return 5;
-	}
-
-	*value = (BYTE) result;
-	return 0;
+    printf("Usage: Talk.exe /n DeviceName [/c ioctl] [/i InputBufferSize] [/o OutputBufferSize] [/d aabbcc] [/s SleepDuration] [/t] [/h]\n");
+    printf("Version: %s\n", VERSION);
+    printf("Last changed: %s\n", LAST_CHANGED);
 }
 
-int parseUint64(const char* arg, ULONGLONG* value, BYTE base)
+void printHelp()
 {
-	char* endptr;
-	int err_no = 0;
-	errno = 0;
-	ULONGLONG result;
-
-	if ( base != 10 && base != 16 && base != 0 )
-	{
-		fprintf(stderr, "Error: Unsupported base %u!\n", base);
-		return 1;
-	}
-
-	if ( arg[0] ==  '-' )
-	{
-		fprintf(stderr, "Error: %s could not be converted to a number: is negative!\n", arg);
-		return 2;
-	}
-
-#if defined(_WIN32)
-	result = strtoull(arg, &endptr, base);
-#else
-	result = strtoul(arg, &endptr, base);
-#endif
-	err_no = errno;
-
-	if ( endptr == arg )
-	{
-		fprintf(stderr, "Error: %s could not be converted to a number: Not a number!\n", arg);
-		return 3;
-	}
-	if ( result == (ULONGLONG)-1 && err_no == ERANGE )
-	{
-		fprintf(stderr, "Error: %s could not be converted to a number: Out of range!\n", arg);
-		return 4;
-	}
-
-	*value = result;
-	return 0;
+    printUsage();
+    printf("\n");
+    printf("Options:\n");
+    printf(" - /n DeviceName to call.\n");
+    printf(" - /c The desired IOCTL.\n");
+    printf(" - /i InputBufferSize possible size of InputBuffer.\n");
+    printf(" - /o OutputBufferSize possible size of OutputBuffer.\n");
+    printf(" - /d InputBuffer data in hex.\n");
+    printf(" - /s Duration of sleep after call\n");
+    printf(" - /t Just test the device for accessibility. Don't send data.\n");
 }

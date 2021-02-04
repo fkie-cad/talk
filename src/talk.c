@@ -9,7 +9,7 @@
 #define PARAM_IDENTIFIER '/'
 #define MAX_BUFFER_LN (0x100)
 
-#define VERSION "2.0.0"
+#define VERSION "2.0.1"
 #define LAST_CHANGED "04.02.2021"
 
 
@@ -37,6 +37,7 @@ void printHelp();
 
 int openDevice(PHANDLE device, CHAR* name);
 int generateIoRequest(HANDLE device, PCmdParams params);
+void printStatus(NTSTATUS status);
 
 ULONG parsePlainBytes(const char* raw, BYTE** buffer, ULONG size);
 int parseUint8(const char* arg, BYTE* value, BYTE base);
@@ -81,7 +82,10 @@ int _cdecl main(int argc, char** argv)
         return 0;
     }
 
-    parseArgs(argc, argv, &params);
+    if ( !parseArgs(argc, argv, &params) )
+    {
+        return -2;
+    }
 
     if ( !checkArgs(&params) )
     {
@@ -131,8 +135,9 @@ int openDevice(PHANDLE device, CHAR* name)
 
     WCHAR dev_name[MAX_PATH];
     swprintf(dev_name, MAX_PATH, L"\\Device\\%hs", name);
+    dev_name[MAX_PATH-1] = 0;
 
-    RtlInitUnicodeString( &devname, dev_name );
+    RtlInitUnicodeString(&devname, dev_name);
     objAttr.Length = sizeof( objAttr );
     objAttr.ObjectName = &devname;
 
@@ -145,7 +150,8 @@ int openDevice(PHANDLE device, CHAR* name)
 
     if ( !NT_SUCCESS(status) )
     {
-        printf("Error status 0x%08x: nobody here.\n", status);
+        printf("Error (0x%08x): nobody here.\n", status);
+        printStatus(status);
         return -1;
     }
 
@@ -157,7 +163,7 @@ int openDevice(PHANDLE device, CHAR* name)
 
 int generateIoRequest(HANDLE device, PCmdParams params)
 {
-    UINT bytesReturned = 0;
+    ULONG bytesReturned = 0;
     SIZE_T i = 0;
     INT s = 0;
     NTSTATUS status;
@@ -165,13 +171,15 @@ int generateIoRequest(HANDLE device, PCmdParams params)
 
     BYTE* InputBuffer = NULL;
     BYTE* OutputBuffer = NULL;
+    
+    HANDLE event;
 
     if ( params->InputBufferSize > 0 )
     {
         InputBuffer = malloc(params->InputBufferSize * 1);
         if ( !InputBuffer )
         {
-            printf("Error (0x%x): InputBuffer calloc failed\n", GetLastError());
+            printf("Error (0x%08x): InputBuffer calloc failed\n", GetLastError());
             s = -2;
             goto clean;
         }
@@ -181,7 +189,7 @@ int generateIoRequest(HANDLE device, PCmdParams params)
         OutputBuffer = malloc(params->OutputBufferSize * 1);
         if ( !OutputBuffer )
         {
-            printf("Error (0x%x): OutputBuffer calloc failed\n", GetLastError());
+            printf("Error (0x%08x): OutputBuffer calloc failed\n", GetLastError());
             s = -2;
             goto clean;
         }
@@ -202,11 +210,24 @@ int generateIoRequest(HANDLE device, PCmdParams params)
         for ( i = 0; i < params->InputBufferSize; i++ ) printf("%02x ", InputBuffer[i]);
         printf("\n");
     }
+    
+    status = NtCreateEvent(&event,
+                           FILE_ALL_ACCESS,
+                           0,
+                           0,
+                           0);
+    if ( status != STATUS_SUCCESS )
+    {
+        printf("ERROR (0x%08x): Create event failed.\n", status);
+        printStatus(status);
+        s = -1;
+        goto clean;
+    }
 
     RtlZeroMemory(&iosb, sizeof(iosb));
 
     status = NtDeviceIoControlFile(device, 
-                                   NULL, 
+                                   event, 
                                    NULL, 
                                    NULL, 
                                    &iosb, 
@@ -215,10 +236,17 @@ int generateIoRequest(HANDLE device, PCmdParams params)
                                    params->InputBufferSize, 
                                    OutputBuffer,
                                    params->OutputBufferSize);
+    
+    if ( status == STATUS_PENDING )
+    {
+        status = NtWaitForSingleObject(event, 0, 0);
+    }
 
     if ( !NT_SUCCESS(status) )
     {
-        fprintf(stderr,"ERROR (0x%lx): Sorry: the driver is present but does not want to answer.\n", status);
+        fprintf(stderr,"ERROR (0x%08x): Sorry, the driver is present but does not want to answer.\n", status);
+        printStatus(status);
+        s = -3;
         goto clean;
     };
 
@@ -227,9 +255,9 @@ int generateIoRequest(HANDLE device, PCmdParams params)
     
     printf("\n");
     printf("Answer received.\n----------------\n");
-    bytesReturned = (UINT) iosb.Information;
+    bytesReturned = (ULONG) iosb.Information;
     printf("The driver returned %d bytes:\n",bytesReturned);
-    if (bytesReturned)
+    if ( bytesReturned )
     {
         for (i=0;i<bytesReturned;i++)
         {
@@ -249,6 +277,28 @@ clean:
         free(OutputBuffer);
 
     return s;
+}
+
+void printStatus(NTSTATUS status)
+{
+    if (status == STATUS_ACCESS_DENIED)
+        printf("STATUS_ACCESS_DENIED.(\n");
+    else if (status == STATUS_INVALID_PARAMETER)
+        printf("STATUS_INVALID_PARAMETER.\n");
+    else if (status == STATUS_NO_SUCH_FILE)
+        printf("STATUS_NO_SUCH_FILE.\n");
+    else if (status == STATUS_INVALID_DEVICE_REQUEST)
+        printf("STATUS_INVALID_DEVICE_REQUEST: The specified request is not a valid operation for the target device.\n");
+    else if (status == STATUS_ILLEGAL_FUNCTION)
+        printf("STATUS_ILLEGAL_FUNCTION: kernel driver is irritated.\n");
+    else if (status == STATUS_INVALID_HANDLE)
+        printf("STATUS_INVALID_HANDLE.\n");
+    else if (status == STATUS_DATATYPE_MISALIGNMENT_ERROR)
+        printf("STATUS_DATATYPE_MISALIGNMENT_ERROR: A data type misalignment error was detected in a load or store instruction.\n");
+    else if (status == STATUS_NOT_SUPPORTED)
+        printf("STATUS_NOT_SUPPORTED: The request is not supported.\n");
+    else if (status == STATUS_OBJECT_NAME_NOT_FOUND)
+        printf("STATUS_OBJECT_NAME_NOT_FOUND.\n");
 }
 
 BOOL parseArgs(INT argc, CHAR** argv, CmdParams* params)
@@ -432,7 +482,7 @@ ULONG parsePlainBytes(const char* raw, BYTE** buffer, ULONG size)
 	p = (BYTE*) malloc(arg_ln/2);
 	if ( p == NULL )
 	{
-		printf("ERROR (0x%x): Allocating memory failed!\n", GetLastError());
+		printf("ERROR (0x%08x): Allocating memory failed!\n", GetLastError());
 		return 0;
 	}
 

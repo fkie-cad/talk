@@ -1,0 +1,13 @@
+.vs/
+.idea/
+bin.*/
+CppProperties.json
+build/
+
+common.mak
+system.mak
+
+*.log
+*.vcxproj.Filters
+*.vcxproj.user
+CMakeSettings.json

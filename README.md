@@ -16,7 +16,7 @@ Last changed: 04.02.2021
 $devcmd> msbuild talk.vcxproj /p:Platform=x64 /p:Configuration=Release
 ```
 
-**other optinos**
+**other options**
 ```bash
 $devcmd> msbuild [talk.vcxproj] [/p:Platform=x86|x64] [/p:Configuration=Debug|Release] [/p:RunTimeLib=Debug|Release] [/p:PDB=No]
 ```
@@ -36,8 +36,8 @@ $ Talk.exe /n DeviceName [/c ioctl] [/i InputBufferSize] [/o OutputBufferSize] [
  - /t Just test the device for accessibility. Don't send data.
 
 **Remarks**  
-If no input data but an input length is given, the buffer will be filled with As.  
-A Sleep maybe usefull with asynchronous calls like Beep.  
+If no input data (`/d`) but an input length (`/i`) is given, the buffer will be filled with As.  
+A sleep (`/s`) may be useful with asynchronous calls like Beep.  
  
 ### EXAMPLE ###
 ```bash

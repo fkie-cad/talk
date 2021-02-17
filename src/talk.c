@@ -11,8 +11,8 @@
 
 
 
-#define VERSION "2.0.1"
-#define LAST_CHANGED "04.02.2021"
+#define VERSION "2.0.2"
+#define LAST_CHANGED "17.02.2021"
 
 
 
@@ -204,6 +204,7 @@ int generateIoRequest(HANDLE device, PCmdParams params)
     if ( !NT_SUCCESS(status) )
     {
         fprintf(stderr,"ERROR (0x%08x): Sorry, the driver is present but does not want to answer.\n", status);
+        fprintf(stderr," iosb info: 0x%08x\n", (ULONG) iosb.Information);
         printStatus(status);
         s = -3;
         goto clean;
@@ -241,7 +242,7 @@ clean:
 void printStatus(NTSTATUS status)
 {
     if (status == STATUS_ACCESS_DENIED)
-        printf("STATUS_ACCESS_DENIED.(\n");
+        printf("STATUS_ACCESS_DENIED.\n");
     else if (status == STATUS_INVALID_PARAMETER)
         printf("STATUS_INVALID_PARAMETER.\n");
     else if (status == STATUS_NO_SUCH_FILE)

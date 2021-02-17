@@ -3,8 +3,8 @@ Talks to a device using NtDeviceIoControl.
 
 
 ## Version ##
-2.0.1  
-Last changed: 04.02.2021
+2.0.2  
+Last changed: 17.02.2021
 
 
 ## REQUIREMENTS ##

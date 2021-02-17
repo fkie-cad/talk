@@ -30,7 +30,7 @@ ULONG parsePlainBytes(const char* raw, BYTE** buffer, ULONG size)
 
 	if ( buffer_ln != size )
 	{
-		printf("Error: Buffer data has the wrong size %zu != %u!\n", arg_ln, size);
+		printf("Error: Buffer data has the wrong size %u != %u!\n", buffer_ln, size);
 		return 0;
 	}
 

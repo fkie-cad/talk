@@ -5,14 +5,14 @@
 
 #define MAX_BUFFER_LN (0x100)
 
-#include "talk.h"
+#include "ntstuff.h"
 #include "Converter.h"
 #include "Args.h"
 
 
 
-#define VERSION "2.0.2"
-#define LAST_CHANGED "17.02.2021"
+#define VERSION "2.0.3"
+#define LAST_CHANGED "12.10.2021"
 
 
 
@@ -37,13 +37,12 @@ void printHelp();
 
 int openDevice(PHANDLE device, CHAR* name);
 int generateIoRequest(HANDLE device, PCmdParams params);
-void printStatus(NTSTATUS status);
 
 
 
 int _cdecl main(int argc, char** argv)
 {
-    HANDLE device = INVALID_HANDLE_VALUE;
+    HANDLE device = NULL;
     CmdParams params;
     BOOL s;
 
@@ -80,7 +79,8 @@ clean:
     if ( params.InputBufferData != NULL )
         free(params.InputBufferData);
 
-    CloseHandle(device);
+    if ( device )
+        NtClose(device);
 
     return 0;
 }
@@ -104,13 +104,12 @@ int openDevice(PHANDLE device, CHAR* name)
                         FILE_GENERIC_READ, 
                         &objAttr, 
                         &iostatusblock,
-                        FILE_SHARE_READ | FILE_SHARE_WRITE, 
-                        3);
+                        0, 
+                        FILE_NON_DIRECTORY_FILE|FILE_SYNCHRONOUS_IO_NONALERT);
 
     if ( !NT_SUCCESS(status) )
     {
-        printf("Error (0x%08x): nobody here.\n", status);
-        printStatus(status);
+        printf("Error (0x%08x): Device not found (%s).\n", status, getStatusString(status));
         return -1;
     }
 
@@ -177,8 +176,7 @@ int generateIoRequest(HANDLE device, PCmdParams params)
                            0);
     if ( status != STATUS_SUCCESS )
     {
-        printf("ERROR (0x%08x): Create event failed.\n", status);
-        printStatus(status);
+        printf("ERROR (0x%08x): Create event failed (%s).\n", status, getStatusString(status));
         s = -1;
         goto clean;
     }
@@ -203,9 +201,8 @@ int generateIoRequest(HANDLE device, PCmdParams params)
 
     if ( !NT_SUCCESS(status) )
     {
-        fprintf(stderr,"ERROR (0x%08x): Sorry, the driver is present but does not want to answer.\n", status);
+        fprintf(stderr,"ERROR (0x%08x): Sorry, the driver is present but does not want to answer (%s).\n", status, getStatusString(status));
         fprintf(stderr," iosb info: 0x%08x\n", (ULONG) iosb.Information);
-        printStatus(status);
         s = -3;
         goto clean;
     };
@@ -237,28 +234,6 @@ clean:
         free(OutputBuffer);
 
     return s;
-}
-
-void printStatus(NTSTATUS status)
-{
-    if (status == STATUS_ACCESS_DENIED)
-        printf("STATUS_ACCESS_DENIED.\n");
-    else if (status == STATUS_INVALID_PARAMETER)
-        printf("STATUS_INVALID_PARAMETER.\n");
-    else if (status == STATUS_NO_SUCH_FILE)
-        printf("STATUS_NO_SUCH_FILE.\n");
-    else if (status == STATUS_INVALID_DEVICE_REQUEST)
-        printf("STATUS_INVALID_DEVICE_REQUEST: The specified request is not a valid operation for the target device.\n");
-    else if (status == STATUS_ILLEGAL_FUNCTION)
-        printf("STATUS_ILLEGAL_FUNCTION: kernel driver is irritated.\n");
-    else if (status == STATUS_INVALID_HANDLE)
-        printf("STATUS_INVALID_HANDLE.\n");
-    else if (status == STATUS_DATATYPE_MISALIGNMENT_ERROR)
-        printf("STATUS_DATATYPE_MISALIGNMENT_ERROR: A data type misalignment error was detected in a load or store instruction.\n");
-    else if (status == STATUS_NOT_SUPPORTED)
-        printf("STATUS_NOT_SUPPORTED: The request is not supported.\n");
-    else if (status == STATUS_OBJECT_NAME_NOT_FOUND)
-        printf("STATUS_OBJECT_NAME_NOT_FOUND.\n");
 }
 
 BOOL parseArgs(INT argc, CHAR** argv, CmdParams* params)

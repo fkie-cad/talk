@@ -3,12 +3,17 @@ Talks to a device using NtDeviceIoControl.
 
 
 ## Version ##
-2.0.2  
-Last changed: 17.02.2021
+2.0.3  
+Last changed: 12.10.2021
 
 
 ## REQUIREMENTS ##
 - msbuild
+- [wdk]
+
+**Remarks**  
+The .vcxproj file is using `WindowsApplicationForDrivers10.0` as the `PlatformToolset`, which leads to smaller builds. 
+If the WDK is not installed, the `PlatformToolset` may be changed to `v142` and it should compile without errors.
 
 
 ## BUILD ##

@@ -30,7 +30,7 @@ $devcmd> msbuild [talk.vcxproj] [/p:Platform=x86|x64] [/p:Configuration=Debug|Re
 
 ## USAGE ##
 ```bash
-$ Talk.exe /n DeviceName [/c ioctl] [/i InputBufferSize] [/o OutputBufferSize] [/d aabbcc] [/c ioctl] [/s SleepDuration] [/t] [/h]
+$ Talk.exe /n DeviceName [/c ioctl] [/i InputBufferSize] [/o OutputBufferSize] [/d aabbcc] [/c ioctl] [/s SleepDuration] [/da <Flags>] [/sa <Flags>] [/t] [/h]
 ```
 
 **Options**
@@ -41,7 +41,7 @@ $ Talk.exe /n DeviceName [/c ioctl] [/i InputBufferSize] [/o OutputBufferSize] [
  - /d InputBuffer data in hex.
  - /s Duration of sleep after call .
  - /t Just test the device for accessibility. Don't send data.
- - /sa DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x12019f
+ - /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x12019f
  - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE =  0x3
 
 **Remarks**  

@@ -440,7 +440,7 @@ int isCallForHelp(char * arg1)
 
 void printUsage()
 {
-    printf("Usage: Talk.exe /n DeviceName [/c ioctl] [/i InputBufferSize] [/o OutputBufferSize] [/d aabbcc] [/s SleepDuration] [/t] [/h]\n");
+    printf("Usage: Talk.exe /n <DeviceName> [/c <ioctl>] [/i <InputBufferSize>] [/o <OutputBufferSize>] [/d <aabbcc>] [/s <SleepDuration>] [/da <Flags>] [/sa <Flags>] [/t] [/h]\n");
     printf("Version: %s\n", VERSION);
     printf("Last changed: %s\n", LAST_CHANGED);
     printf("Compiled: %s %s\n", __DATE__, __TIME__);
@@ -458,6 +458,6 @@ void printHelp()
     printf(" - /d InputBuffer data in hex.\n");
     printf(" - /s Duration of sleep after call\n");
     printf(" - /t Just test the device for accessibility. Don't send data.\n");
-    printf(" - /sa DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x%x.\n", (FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE));
+    printf(" - /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x%x.\n", (FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE));
     printf(" - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x%x.\n", (FILE_SHARE_READ|FILE_SHARE_WRITE));
 }

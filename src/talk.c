@@ -11,8 +11,8 @@
 
 
 
-#define VERSION "2.0.3"
-#define LAST_CHANGED "12.10.2021"
+#define VERSION "2.0.4"
+#define LAST_CHANGED "11.01.2022"
 
 
 
@@ -24,6 +24,8 @@ typedef struct CmdParams {
     ULONG IOCTL;
     ULONG Sleep;
     BOOL TestHandle;
+    ACCESS_MASK DesiredAccess;
+    ULONG ShareAccess;
 } CmdParams, * PCmdParams;
 
 
@@ -35,7 +37,7 @@ void printArgs(PCmdParams params);
 void printUsage();
 void printHelp();
 
-int openDevice(PHANDLE device, CHAR* name);
+int openDevice(PHANDLE device, CHAR* name, ACCESS_MASK DesiredAccess, ULONG ShareAccess);
 int generateIoRequest(HANDLE device, PCmdParams params);
 
 
@@ -46,11 +48,16 @@ int _cdecl main(int argc, char** argv)
     CmdParams params;
     BOOL s;
 
+
     if ( isAskForHelp(argc, argv) )
     {
         printHelp();
         return 0;
     }
+    
+    ZeroMemory(&params, sizeof(CmdParams));
+    params.DesiredAccess = FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE;
+    params.ShareAccess = FILE_SHARE_READ|FILE_SHARE_WRITE;
 
     if ( !parseArgs(argc, argv, &params) )
     {
@@ -67,7 +74,7 @@ int _cdecl main(int argc, char** argv)
     printArgs(&params);
 
 
-    s = openDevice(&device, params.DeviceName);
+    s = openDevice(&device, params.DeviceName, params.DesiredAccess, params.ShareAccess);
     if ( s != 0 )
         return -1;
     if ( params.TestHandle )
@@ -85,7 +92,7 @@ clean:
     return 0;
 }
 
-int openDevice(PHANDLE device, CHAR* name)
+int openDevice(PHANDLE device, CHAR* name, ACCESS_MASK DesiredAccess, ULONG ShareAccess)
 {
     NTSTATUS status;
     OBJECT_ATTRIBUTES objAttr = { 0 };
@@ -100,20 +107,33 @@ int openDevice(PHANDLE device, CHAR* name)
     objAttr.Length = sizeof( objAttr );
     objAttr.ObjectName = &devname;
 
-    status = NtOpenFile(device, 
-                        FILE_GENERIC_READ, 
-                        &objAttr, 
-                        &iostatusblock,
-                        0, 
-                        FILE_NON_DIRECTORY_FILE|FILE_SYNCHRONOUS_IO_NONALERT);
-
+    //status = NtCreateFile(device, 
+    //                    FILE_GENERIC_READ|FILE_GENERIC_READ|SYNCHRONIZE, 
+    //                    &objAttr, 
+    //                    &iostatusblock,
+    //                    0, 
+    //                    FILE_NON_DIRECTORY_FILE|FILE_SYNCHRONOUS_IO_NONALERT);
+    
+    status = NtCreateFile(
+                device,
+                DesiredAccess,
+                &objAttr,
+                &iostatusblock,
+                NULL,
+                FILE_ATTRIBUTE_NORMAL,
+                ShareAccess,
+                FILE_OPEN,
+                FILE_NON_DIRECTORY_FILE|FILE_SYNCHRONOUS_IO_NONALERT,
+                NULL, 
+                0
+            );
     if ( !NT_SUCCESS(status) )
     {
-        printf("Error (0x%08x): Device not found (%s).\n", status, getStatusString(status));
+        printf("Error (0x%08x): Open device failed: %s.\n", status, getStatusString(status));
         return -1;
     }
 
-    printf("device: 0x%p\n", *device);
+    printf("device: %p\n", *device);
     printf("\n");
 
     return 0;
@@ -244,7 +264,6 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* params)
     BOOL error = FALSE;
 
     // defaults
-    memset(params, 0, sizeof(CmdParams));
 
     for ( i = start_i; i < last_i; i++ )
     {
@@ -322,12 +341,46 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* params)
                 i++;
             }
         }
+        else if ( isArgOfType(argv[i], "da") )
+        {
+            if ( hasValue("da", i, last_i) )
+            {
+                __try {
+                    params->DesiredAccess = (ULONG)strtoul(argv[i + 1], NULL, 0);
+                }
+                __except ( EXCEPTION_EXECUTE_HANDLER )
+                {
+                    printf("[X] Exception in %s [%s line %d]\n", __FUNCTION__, __FILE__, __LINE__);
+                    error = TRUE;
+                    break;
+                }
+
+                i++;
+            }
+        }
         else if ( isArgOfType(argv[i], "s") )
         {
             if ( hasValue("s", i, last_i) )
             {
                 __try {
                     params->Sleep = (ULONG)strtoul(argv[i + 1], NULL, 0);
+                }
+                __except ( EXCEPTION_EXECUTE_HANDLER )
+                {
+                    printf("[X] Exception in %s [%s line %d]\n", __FUNCTION__, __FILE__, __LINE__);
+                    error = TRUE;
+                    break;
+                }
+
+                i++;
+            }
+        }
+        else if ( isArgOfType(argv[i], "sa") )
+        {
+            if ( hasValue("sa", i, last_i) )
+            {
+                __try {
+                    params->ShareAccess = (ULONG)strtoul(argv[i + 1], NULL, 0);
                 }
                 __except ( EXCEPTION_EXECUTE_HANDLER )
                 {
@@ -390,6 +443,7 @@ void printUsage()
     printf("Usage: Talk.exe /n DeviceName [/c ioctl] [/i InputBufferSize] [/o OutputBufferSize] [/d aabbcc] [/s SleepDuration] [/t] [/h]\n");
     printf("Version: %s\n", VERSION);
     printf("Last changed: %s\n", LAST_CHANGED);
+    printf("Compiled: %s %s\n", __DATE__, __TIME__);
 }
 
 void printHelp()
@@ -404,4 +458,6 @@ void printHelp()
     printf(" - /d InputBuffer data in hex.\n");
     printf(" - /s Duration of sleep after call\n");
     printf(" - /t Just test the device for accessibility. Don't send data.\n");
+    printf(" - /sa DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x%x.\n", (FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE));
+    printf(" - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x%x.\n", (FILE_SHARE_READ|FILE_SHARE_WRITE));
 }

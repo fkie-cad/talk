@@ -3,8 +3,8 @@ Talks to a device using NtDeviceIoControl.
 
 
 ## Version ##
-2.0.3  
-Last changed: 12.10.2021
+2.0.4  
+Last changed: 11.01.2022
 
 
 ## REQUIREMENTS ##
@@ -18,6 +18,8 @@ If the WDK is not installed, the `PlatformToolset` may be changed to `v142` and 
 
 ## BUILD ##
 ```bash
+$devcmd> build.bat [/?]
+// or
 $devcmd> msbuild talk.vcxproj /p:Platform=x64 /p:Configuration=Release
 ```
 
@@ -39,6 +41,8 @@ $ Talk.exe /n DeviceName [/c ioctl] [/i InputBufferSize] [/o OutputBufferSize] [
  - /d InputBuffer data in hex.
  - /s Duration of sleep after call .
  - /t Just test the device for accessibility. Don't send data.
+ - /sa DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x12019f
+ - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE =  0x3
 
 **Remarks**  
 If no input data (`/d`) but an input length (`/i`) is given, the buffer will be filled with As.  

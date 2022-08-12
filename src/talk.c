@@ -6,13 +6,14 @@
 #define MAX_BUFFER_LN (0x100)
 
 #include "ntstuff.h"
+#include "warnings.h"
 #include "Converter.h"
 #include "Args.h"
 
 
 
-#define VERSION "2.0.4"
-#define LAST_CHANGED "11.01.2022"
+#define VERSION "2.0.5"
+#define LAST_CHANGED "12.08.2022"
 
 
 
@@ -37,7 +38,7 @@ void printArgs(PCmdParams params);
 void printUsage();
 void printHelp();
 
-int openDevice(PHANDLE device, CHAR* name, ACCESS_MASK DesiredAccess, ULONG ShareAccess);
+int openDevice(PHANDLE device, CHAR* DeviceNameA, ACCESS_MASK DesiredAccess, ULONG ShareAccess);
 int generateIoRequest(HANDLE device, PCmdParams params);
 
 
@@ -67,7 +68,7 @@ int _cdecl main(int argc, char** argv)
     if ( !checkArgs(&params) )
     {
         printUsage();
-        return 1;
+        return -1;
     }
 
     
@@ -92,28 +93,21 @@ clean:
     return 0;
 }
 
-int openDevice(PHANDLE device, CHAR* name, ACCESS_MASK DesiredAccess, ULONG ShareAccess)
+int openDevice(PHANDLE device, CHAR* DeviceNameA, ACCESS_MASK DesiredAccess, ULONG ShareAccess)
 {
     NTSTATUS status;
     OBJECT_ATTRIBUTES objAttr = { 0 };
-    UNICODE_STRING devname;
+    UNICODE_STRING deviceNameUS;
     IO_STATUS_BLOCK iostatusblock;
 
-    WCHAR dev_name[MAX_PATH];
-    swprintf(dev_name, MAX_PATH, L"\\Device\\%hs", name);
-    dev_name[MAX_PATH-1] = 0;
+    WCHAR deviceNameW[MAX_PATH];
+    swprintf(deviceNameW, MAX_PATH, L"%hs", DeviceNameA);
+    deviceNameW[MAX_PATH-1] = 0;
 
-    RtlInitUnicodeString(&devname, dev_name);
+    RtlInitUnicodeString(&deviceNameUS, deviceNameW);
     objAttr.Length = sizeof( objAttr );
-    objAttr.ObjectName = &devname;
+    objAttr.ObjectName = &deviceNameUS;
 
-    //status = NtCreateFile(device, 
-    //                    FILE_GENERIC_READ|FILE_GENERIC_READ|SYNCHRONIZE, 
-    //                    &objAttr, 
-    //                    &iostatusblock,
-    //                    0, 
-    //                    FILE_NON_DIRECTORY_FILE|FILE_SYNCHRONOUS_IO_NONALERT);
-    
     status = NtCreateFile(
                 device,
                 DesiredAccess,
@@ -143,32 +137,31 @@ int generateIoRequest(HANDLE device, PCmdParams params)
 {
     ULONG bytesReturned = 0;
     SIZE_T i = 0;
-    INT s = 0;
-    NTSTATUS status;
+    NTSTATUS status = 0;
     IO_STATUS_BLOCK iosb;
 
-    BYTE* InputBuffer = NULL;
-    BYTE* OutputBuffer = NULL;
+    BYTE* inputBuffer = NULL;
+    BYTE* outputBuffer = NULL;
     
     HANDLE event;
 
     if ( params->InputBufferSize > 0 )
     {
-        InputBuffer = malloc(params->InputBufferSize * 1);
-        if ( !InputBuffer )
+        inputBuffer = malloc(params->InputBufferSize);
+        if ( !inputBuffer )
         {
-            printf("Error (0x%08x): InputBuffer calloc failed\n", GetLastError());
-            s = -2;
+            status = GetLastError();
+            printf("Error (0x%08x): inputBuffer calloc failed\n", status);
             goto clean;
         }
     }
     if ( params->OutputBufferSize > 0 )
     {
-        OutputBuffer = malloc(params->OutputBufferSize * 1);
-        if ( !OutputBuffer )
+        outputBuffer = malloc(params->OutputBufferSize);
+        if ( !outputBuffer )
         {
-            printf("Error (0x%08x): OutputBuffer calloc failed\n", GetLastError());
-            s = -2;
+            status = GetLastError();
+            printf("Error (0x%08x): outputBuffer calloc failed\n", status);
             goto clean;
         }
     }
@@ -177,15 +170,15 @@ int generateIoRequest(HANDLE device, PCmdParams params)
     printf("Launching I/O Request Packet...\n");
     
     if ( params->InputBufferData )
-        memcpy(InputBuffer, params->InputBufferData, params->InputBufferSize);
+        memcpy(inputBuffer, params->InputBufferData, params->InputBufferSize);
     else
-        memset(InputBuffer, 'A', params->InputBufferSize); // Initialize with 'A'.
-    memset(OutputBuffer, 0, params->OutputBufferSize); // Potential stuff returned by driver goes here.
+        memset(inputBuffer, 'A', params->InputBufferSize); // Initialize with 'A'.
+    memset(outputBuffer, 0, params->OutputBufferSize); // Potential stuff returned by driver goes here.
     
-    if ( InputBuffer )
+    if ( inputBuffer )
     {
-        printf(" - InputBuffer: ");
-        for ( i = 0; i < params->InputBufferSize; i++ ) printf("%02x ", InputBuffer[i]);
+        printf(" - inputBuffer: ");
+        for ( i = 0; i < params->InputBufferSize; i++ ) printf("%02x ", inputBuffer[i]);
         printf("\n");
     }
     
@@ -197,7 +190,6 @@ int generateIoRequest(HANDLE device, PCmdParams params)
     if ( status != STATUS_SUCCESS )
     {
         printf("ERROR (0x%08x): Create event failed (%s).\n", status, getStatusString(status));
-        s = -1;
         goto clean;
     }
 
@@ -209,9 +201,9 @@ int generateIoRequest(HANDLE device, PCmdParams params)
                                    NULL, 
                                    &iosb, 
                                    params->IOCTL, 
-                                   InputBuffer, 
+                                   inputBuffer, 
                                    params->InputBufferSize, 
-                                   OutputBuffer,
+                                   outputBuffer,
                                    params->OutputBufferSize);
     
     if ( status == STATUS_PENDING )
@@ -223,7 +215,6 @@ int generateIoRequest(HANDLE device, PCmdParams params)
     {
         fprintf(stderr,"ERROR (0x%08x): Sorry, the driver is present but does not want to answer (%s).\n", status, getStatusString(status));
         fprintf(stderr," iosb info: 0x%08x\n", (ULONG) iosb.Information);
-        s = -3;
         goto clean;
     };
 
@@ -233,13 +224,16 @@ int generateIoRequest(HANDLE device, PCmdParams params)
     printf("\n");
     printf("Answer received.\n----------------\n");
     bytesReturned = (ULONG) iosb.Information;
-    printf("The driver returned %d bytes:\n",bytesReturned);
-    if ( bytesReturned )
+    printf("The driver returned 0x%x bytes:\n", bytesReturned);
+    if ( bytesReturned && bytesReturned <= params->OutputBufferSize )
     {
-        for (i=0;i<bytesReturned;i++)
+// warning C6385: Reading invalid data from 'outputBuffer':  the readable size is 'params->OutputBufferSize' bytes, but '2' bytes may be read ??
+#pragma warning ( disable : 6385 )
+        for ( i = 0; i < bytesReturned; i++ )
         {
-            printf("%02x ",OutputBuffer[i]);
+            printf("%02x ", outputBuffer[i]);
         }
+#pragma warning ( default : 6385 )
         printf("\n");
     }
     printf("\n----------------\n");
@@ -247,13 +241,13 @@ int generateIoRequest(HANDLE device, PCmdParams params)
 
 
 clean:
-    if ( InputBuffer )
-        free(InputBuffer);
+    if ( inputBuffer )
+        free(inputBuffer);
 
-    if ( OutputBuffer )
-        free(OutputBuffer);
+    if ( outputBuffer )
+        free(outputBuffer);
 
-    return s;
+    return status;
 }
 
 BOOL parseArgs(INT argc, CHAR** argv, CmdParams* params)
@@ -429,7 +423,7 @@ void printArgs(PCmdParams params)
         printf("\n");
     }
     printf(" - Sleep: 0x%x\n", params->Sleep);
-    printf(" - TestHandle: %u\n", params->TestHandle);
+    printf(" - TestHandle: %d\n", params->TestHandle);
     printf("\n");
 }
 
@@ -451,7 +445,7 @@ void printHelp()
     printUsage();
     printf("\n");
     printf("Options:\n");
-    printf(" - /n DeviceName to call.\n");
+    printf(" - /n DeviceName to call. I.e. \"\\Device\\Beep\"\n");
     printf(" - /c The desired IOCTL.\n");
     printf(" - /i InputBufferSize possible size of InputBuffer.\n");
     printf(" - /o OutputBufferSize possible size of OutputBuffer.\n");

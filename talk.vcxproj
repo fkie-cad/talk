@@ -75,6 +75,8 @@
       <AdditionalDependencies>%(AdditionalDependencies);ntdll.lib;</AdditionalDependencies>
     </Link>
     <ClCompile>
+      <EnablePREfast>true</EnablePREfast>
+      <ConformanceMode>true</ConformanceMode>
       <TreatWarningAsError>true</TreatWarningAsError>
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);</AdditionalIncludeDirectories>

@@ -28,7 +28,7 @@ GOTO :ParseParams
 
 :ParseParams
 
-    REM IF "%~1"=="" GOTO Main
+    IF [%1]==[] GOTO main
     if [%1]==[/?] goto help
     if [%1]==[/h] goto help
     if [%1]==[/help] goto help
@@ -170,6 +170,11 @@ GOTO :ParseParams
             set rtl=%conf%
         ) else (
             set rtl=None
+        )
+
+        :: pdbs
+        if [%conf%] EQU [Debug] (
+            set /a pdb=1
         )
         
         if %verbose% EQU 1 (

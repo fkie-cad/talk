@@ -2,6 +2,7 @@
 #define NT_STUFF_H
 
 #define STATUS_SUCCESS                       ((NTSTATUS)0x00000000L)
+#define STATUS_OBJECT_PATH_SYNTAX_BAD        ((NTSTATUS)0x0000003BL)
 #define STATUS_NO_SUCH_DEVICE                ((NTSTATUS)0xC000000EL)
 #define STATUS_NO_SUCH_FILE                  ((NTSTATUS)0xC000000FL)
 #define STATUS_INVALID_DEVICE_REQUEST        ((NTSTATUS)0xC0000010L)
@@ -60,6 +61,8 @@ const char* getStatusString(NTSTATUS status)
         return "STATUS_OBJECT_NAME_COLLISION";
     case STATUS_OBJECT_PATH_NOT_FOUND:
         return "STATUS_OBJECT_PATH_NOT_FOUND";
+    case STATUS_OBJECT_PATH_SYNTAX_BAD:
+        return "STATUS_OBJECT_PATH_SYNTAX_BAD";
     default:
         return "unknown";
     }

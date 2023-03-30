@@ -13,16 +13,16 @@
 
 
 
-#define VERSION "2.0.6"
+#define VERSION "2.0.7"
 #define LAST_CHANGED "30.03.2023"
 
 
-#define FLAG_VERBOSE    (0x01)
-#define FLAG_PRINT_B    (0x02)
-#define FLAG_PRINT_W    (0x04)
-#define FLAG_PRINT_DW   (0x08)
-#define FLAG_PRINT_QW   (0x10)
-#define FLAG_PRINT_COLS (0x20)
+#define FLAG_VERBOSE        (0x01)
+#define FLAG_PRINT_B        (0x02)
+#define FLAG_PRINT_COLS_8   (0x04)
+#define FLAG_PRINT_COLS_16  (0x08)
+#define FLAG_PRINT_COLS_32  (0x10)
+#define FLAG_PRINT_COLS_64  (0x20)
 
 
 typedef struct CmdParams {
@@ -224,7 +224,7 @@ int generateIoRequest(HANDLE Device, PCmdParams Params)
 
     if ( !NT_SUCCESS(status) )
     {
-        fprintf(stderr,"ERROR (0x%08x): Sorry, the driver is present but does not want to answer (%s).\n", status, getStatusString(status));
+        fprintf(stderr,"ERROR (0x%08x): Sorry, the driver is present but does not want to answer.\n %s.\n", status, getStatusString(status));
         fprintf(stderr," iosb info: 0x%08x\n", (ULONG) iosb.Information);
         goto clean;
     };
@@ -244,9 +244,21 @@ int generateIoRequest(HANDLE Device, PCmdParams Params)
         {
             PrintMemBytes(outputBuffer, bytesReturned);
         }
-        else if ( Params->Flags & FLAG_PRINT_COLS )
+        else if ( Params->Flags & FLAG_PRINT_COLS_8 )
         {
-            PrintMemCols(outputBuffer, bytesReturned);
+            PrintMemCols8(outputBuffer, bytesReturned);
+        }
+        else if ( Params->Flags & FLAG_PRINT_COLS_16 )
+        {
+            PrintMemCols16(outputBuffer, bytesReturned);
+        }
+        else if ( Params->Flags & FLAG_PRINT_COLS_32 )
+        {
+            PrintMemCols32(outputBuffer, bytesReturned);
+        }
+        else if ( Params->Flags & FLAG_PRINT_COLS_64 )
+        {
+            PrintMemCols64(outputBuffer, bytesReturned);
         }
 #pragma warning ( default : 6385 )
     }
@@ -442,22 +454,22 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
         {
             Params->Flags |= FLAG_PRINT_B;
         }
-        else if ( IS_2C_ARG(arg, 'pc') )
+        else if ( IS_3C_ARG(arg, 'pc8') )
         {
-            Params->Flags |= FLAG_PRINT_COLS;
+            Params->Flags |= FLAG_PRINT_COLS_8;
         }
-        //else if ( IS_2C_ARG(arg, 'pw') )
-        //{
-        //    Params->Flags |= FLAG_PRINT_W;
-        //}
-        //else if ( IS_2C_ARG(arg, 'pd') )
-        //{
-        //    Params->Flags |= FLAG_PRINT_DW;
-        //}
-        //else if ( IS_2C_ARG(arg, 'pq') )
-        //{
-        //    Params->Flags |= FLAG_PRINT_QW;
-        //}
+        else if ( IS_4C_ARG(arg, 'pc16') )
+        {
+            Params->Flags |= FLAG_PRINT_COLS_16;
+        }
+        else if ( IS_4C_ARG(arg, 'pc32') )
+        {
+            Params->Flags |= FLAG_PRINT_COLS_32;
+        }
+        else if ( IS_4C_ARG(arg, 'pc64') )
+        {
+            Params->Flags |= FLAG_PRINT_COLS_64;
+        }
         else
         {
             printf("INFO: Unknown arg type \"%s\"\n", argv[i]);
@@ -476,14 +488,17 @@ BOOL checkArgs(CmdParams* Params)
         s = -1;
     }
     
-    ULONG f = Params->Flags&(FLAG_PRINT_B|FLAG_PRINT_W|FLAG_PRINT_DW|FLAG_PRINT_QW|FLAG_PRINT_COLS);
+    ULONG f = Params->Flags&(FLAG_PRINT_B|FLAG_PRINT_COLS_8|FLAG_PRINT_COLS_16|FLAG_PRINT_COLS_32|FLAG_PRINT_COLS_64);
     if ( ( (f & (f-1)) != 0 ) )
     {
         printf("ERROR: No valid printing mode!\n");
         s = -1;
     }
     if ( f == 0 )
-        Params->Flags |= FLAG_PRINT_COLS;
+        Params->Flags |= FLAG_PRINT_COLS_8;
+
+    if ( s != 0 )
+        printf("\n");
 
     return s == 0;
 }
@@ -532,5 +547,8 @@ void printHelp()
     printf(" - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x%x.\n", (FILE_SHARE_READ|FILE_SHARE_WRITE));
     printf(" - /p* Printig style for output buffer.\n");
     printf("    * /pb Print in plain bytes.\n");
-    printf("    * /pc Print in cols of Address | bytes | ascii.\n");
+    printf("    * /pc8 Print in cols of Address | bytes | ascii chars.\n");
+    printf("    * /pc16 Print in cols of Address | words | utf-16 chars.\n");
+    printf("    * /pc32 Print in cols of Address | dwords.\n");
+    printf("    * /pc64 Print in cols of Address | qwords.\n");
 }

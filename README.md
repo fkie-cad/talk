@@ -3,7 +3,7 @@ Talks to a device using NtDeviceIoControl.
 
 
 ## Version ##
-2.0.6  
+2.0.7  
 Last changed: 30.03.2023
 
 
@@ -40,7 +40,10 @@ $ Talk.exe /n DeviceName [/c ioctl] [/i InputBufferSize] [/o OutputBufferSize] [
  - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE =  0x3
  - /p* Printig style for output buffer
     - /pb Print in plain bytes
-    - /pc Print in cols of Address | bytes | ascii
+    - /pc8 Print in cols of Address | bytes | ascii chars
+    - /pc16 Print in cols of Address | words | utf-16 chars
+    - /pc32 Print in cols of Address | dwords
+    - /pc64 Print in cols of Address | qwords
 
 **Remarks**  
 If no input data (`/d`) but an input length (`/i`) is given, the buffer will be filled with As (0x41).  

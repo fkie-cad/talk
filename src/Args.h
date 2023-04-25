@@ -9,6 +9,8 @@
 #define WIN_PARAM_IDENTIFIER '/'
 #define PARAM_IDENTIFIER WIN_PARAM_IDENTIFIER
 
+#define GET_ARG_VALUE(__argc__, __argv__, __i__, __id__) ( __i__ < __argc__ - __id__ ) ? __argv__[__i__+__id__] : NULL
+#define IS_PARAM(__arg__) (__arg__ != NULL && ( __arg__[0] == LIN_PARAM_IDENTIFIER || __arg__[0] == WIN_PARAM_IDENTIFIER) )
 #define NOT_A_VALUE(__val__) (__val__ == NULL || __val__[0] == LIN_PARAM_IDENTIFIER || __val__[0] == WIN_PARAM_IDENTIFIER)
 #define IS_1C_ARG(_a_, _v_) ( ( _a_[0] == LIN_PARAM_IDENTIFIER || _a_[0] == WIN_PARAM_IDENTIFIER ) && _a_[1] == _v_ && _a_[2] == 0 )
 #define IS_2C_ARG(_a_, _v_) \
@@ -43,7 +45,7 @@ BOOL isAskForHelp(INT argc, CHAR** argv)
     if ( argc < i+1 )
         return FALSE;
 
-    return isArgOfType(argv[i], "h") || isArgOfType(argv[i], "?");
+    return isArgOfType(argv[i], "h") || IS_1C_ARG(argv[i], '?');
 }
 
 BOOL isArgOfType(const CHAR* arg, const CHAR* type)

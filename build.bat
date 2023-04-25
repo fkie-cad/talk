@@ -2,6 +2,7 @@
 
 set my_name=%~n0
 set my_dir="%~dp0"
+set "my_dir=%my_dir:~1,-2%"
 
 set /a prog=0
 set /a verbose=0

@@ -9,25 +9,25 @@ int parseUint8(const char* arg, UINT8* value, UINT8 base);
 int parseUint64(const char* arg, ULONGLONG* value, UINT8 base);
 
 
-#define IN_NUM(__char__) \
+#define IS_NUM(__char__) \
     ( __char__ >= '0' && __char__ <= '9' )
 
 #define IN_HEX_RANGE(__char__) \
-    ( IN_NUM(__char__) || ( __char__ >= 'a' && __char__ <= 'f' )  || ( __char__ >= 'A' && __char__ <= 'F' ) )
+    ( IS_NUM(__char__) || ( __char__ >= 'a' && __char__ <= 'f' )  || ( __char__ >= 'A' && __char__ <= 'F' ) )
 
 /**
  * Parse plain byte string into byte array
  */
 INT parsePlainBytes(
     _In_ const char* Raw, 
-    _Inout_ BYTE** Buffer, 
+    _Inout_ PUINT8* Buffer, 
     _Inout_ PULONG Size, 
     _In_ ULONG MaxBytes
 )
 {
     ULONG i, j;
     SIZE_T arg_ln = strlen(Raw);
-    BYTE* p = NULL;
+    PUINT8 p = NULL;
     BOOL malloced = FALSE;
     ULONG buffer_ln;
     int s = 0;
@@ -39,8 +39,6 @@ INT parsePlainBytes(
         printf("Error: Data too big!\n");
         return ERROR_BUFFER_OVERFLOW;
     }
-    
-    buffer_ln = (ULONG) (arg_ln / 2);
 
     if ( arg_ln == 0 )
     {
@@ -52,16 +50,18 @@ INT parsePlainBytes(
         printf("Error: Buffer data is not byte aligned!\n");
         return ERROR_INVALID_PARAMETER;
     }
+    
+    buffer_ln = (ULONG) (arg_ln / 2);
 
-    if ( *Size && buffer_ln > *Size )
+    if ( *Size && *Buffer && buffer_ln > *Size )
     {
-        printf("Error: Buffer is too small %u > %u!\n", buffer_ln, *Size);
+        printf("Error: Provided buffer is too small 0x%x < 0x%x!\n", *Size, buffer_ln);
         return ERROR_INVALID_PARAMETER;
     }
 
     if ( *Buffer == NULL )
     {
-        p = (BYTE*) malloc(buffer_ln);
+        p = (PUINT8) malloc(buffer_ln);
         if ( p == NULL )
         {
             printf("Error: No memory!\n");

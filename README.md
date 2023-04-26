@@ -61,7 +61,7 @@ $ Talk.exe /n DeviceName [/c <ioctl>] [/is <size>] [/os <size>] [/i(x|b|w|d|q|a|
 If no input data (`/i*`) but an input length (`/is`) is given, the buffer will be filled with As (0x41).  
 If input data (`/i*`) is given, the input length will be set to its size, independent of a size possibly set with `/is`.  
 A sleep (`/s`) may be useful with asynchronous calls like Beep.  
- 
+
 ### EXAMPLE ###
 Call beep
 ```bash

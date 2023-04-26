@@ -4,9 +4,7 @@
 #include <stdlib.h>
 #include <strsafe.h>
 
-//#define MAX_BUFFER_LN (0x100)
-
-#include "ntstuff.h"
+#include "nt.h"
 #include "warnings.h"
 #include "Converter.h"
 #include "Args.h"
@@ -53,8 +51,17 @@ void printArgs(PCmdParams Params);
 void printUsage();
 void printHelp();
 
-int openDevice(PHANDLE Device, CHAR* DeviceNameA, ACCESS_MASK DesiredAccess, ULONG ShareAccess);
-int generateIoRequest(HANDLE Device, PCmdParams Params);
+int openDevice(
+    _Out_ PHANDLE Device, 
+    _In_ CHAR* DeviceNameA, 
+    _In_ ACCESS_MASK DesiredAccess, 
+    _In_ ULONG ShareAccess
+);
+
+int generateIoRequest(
+    _In_ HANDLE Device, 
+    _In_ PCmdParams Params
+);
 
 int openFile(
     _Out_ PHANDLE File, 
@@ -69,7 +76,7 @@ int _cdecl main(int argc, char** argv)
 {
     HANDLE device = NULL;
     CmdParams params;
-    BOOL s;
+    INT s;
 
 
     if ( isAskForHelp(argc, argv) )
@@ -81,9 +88,11 @@ int _cdecl main(int argc, char** argv)
     ZeroMemory(&params, sizeof(CmdParams));
     params.DesiredAccess = FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE;
     params.ShareAccess = FILE_SHARE_READ|FILE_SHARE_WRITE;
+    params.FillValue = DEFAULT_FILL_VALUE;
 
     if ( !parseArgs(argc, argv, &params) )
     {
+        printUsage();
         return -2;
     }
 
@@ -115,7 +124,7 @@ clean:
     return s;
 }
 
-int generateIoRequest(HANDLE Device, PCmdParams Params)
+int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
 {
     ULONG bytesReturned = 0;
     NTSTATUS status = 0;
@@ -132,7 +141,7 @@ int generateIoRequest(HANDLE Device, PCmdParams Params)
         if ( !inputBuffer )
         {
             status = GetLastError();
-            printf("Error (0x%08x): inputBuffer calloc failed\n", status);
+            printf("Error (0x%08x): inputBuffer malloc failed\n", status);
             goto clean;
         }
         memset(inputBuffer, Params->FillValue, Params->InputBufferSize);
@@ -148,7 +157,7 @@ int generateIoRequest(HANDLE Device, PCmdParams Params)
         if ( !outputBuffer )
         {
             status = GetLastError();
-            printf("Error (0x%08x): outputBuffer calloc failed\n", status);
+            printf("Error (0x%08x): outputBuffer malloc failed\n", status);
             goto clean;
         }
 
@@ -195,13 +204,13 @@ int generateIoRequest(HANDLE Device, PCmdParams Params)
 
     if ( !NT_SUCCESS(status) )
     {
-        fprintf(stderr, "ERROR (0x%08x): Sorry, the driver is present but does not want to answer.\n %s.\n", status, getStatusString(status));
-        fprintf(stderr, " iosb info: 0x%08x\n", (ULONG)iosb.Information);
+        printf("ERROR (0x%08x): Sorry, the driver is present but does not want to answer.\n %s.\n", status, getStatusString(status));
+        printf(" iosb info: 0x%08x\n", (ULONG)iosb.Information);
         goto clean;
     };
 
     if ( Params->Sleep )
-    Sleep(Params->Sleep);
+        Sleep(Params->Sleep);
 
     printf("\n");
     printf("Answer received.\n----------------\n");
@@ -281,6 +290,16 @@ clean:
     __bufferSize__ = __size__; \
 }
 
+#define CONTINUE_IF_ID_SET(__id__, __i__) \
+{ \
+    if ( __id__ ) \
+    { \
+        printf("INFO: InputData already set! Skipping!\n"); \
+        __i__++; \
+        continue; \
+    } \
+}
+
 BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
 {
     INT start_i = 1;
@@ -298,11 +317,9 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
     PWCHAR ntPath = NULL;
     HANDLE file = NULL;
 
-    // defaults
-    Params->FillValue = DEFAULT_FILL_VALUE;
-
     for ( i = start_i; i < last_i; i++ )
     {
+            printf("i: 0x%x\n", i);
         arg = argv[i];
         val1 = GET_ARG_VALUE(argc, argv, i, 1);
 
@@ -311,24 +328,15 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
 
         if ( IS_1C_ARG(arg, 'n') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No name set!\n");
-                break;
-            }
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No name set!\n");
 
             Params->DeviceName = val1;
             i++;
         }
         else if ( IS_2C_ARG(arg, 'is') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No input length set!\n");
-                break;
-            }
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No input length set!\n");
+
             if ( Params->InputBufferData )
             {
                 printf("INFO: InputData size already set! Skipping!\n");
@@ -342,42 +350,26 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'os') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No output length set!\n");
-                break;
-            }
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No output length set!\n");
+
             STR_TO_ULONG(Params->OutputBufferSize, val1, s);
 
             i++;
         }
         else if ( IS_1C_ARG(arg, 'c') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No ioctl code set!\n");
-                break;
-            }
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No ioctl code set!\n");
+  
             STR_TO_ULONG(Params->IOCTL, val1, s);
 
             i++;
         }
         else if ( IS_2C_ARG(arg, 'ix') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No byte data set!\n");
-                break;
-            }
-            if ( Params->InputBufferData )
-            {
-                printf("INFO: InputData already set! Skipping!\n");
-                i++;
-                continue;
-            }
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No hex data set!\n");
+
+            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
+
             s = parsePlainBytes(val1, &Params->InputBufferData, &Params->InputBufferSize, MAXUINT32);
             if ( s != 0 )
             {
@@ -388,18 +380,9 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'ib') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No byte data set!\n");
-                break;
-            }
-            if ( Params->InputBufferData )
-            {
-                printf("INFO: InputData already set! Skipping!\n");
-                i++;
-                continue;
-            }
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No byte data set!\n");
+
+            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
     
             PARSE_ID_NUMBER(Params->InputBufferData, Params->InputBufferSize, 1, s, UINT8, val1);
             
@@ -407,75 +390,39 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'iw') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No word data set!\n");
-                break;
-            }
-            if ( Params->InputBufferData )
-            {
-                printf("INFO: InputData already set! Skipping!\n");
-                i++;
-                continue;
-            }
-            
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No word data set!\n");
+
+            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
+
             PARSE_ID_NUMBER(Params->InputBufferData, Params->InputBufferSize, 2, s, UINT16, val1);
 
             i++;
         }
         else if ( IS_2C_ARG(arg, 'id') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No word data set!\n");
-                break;
-            }
-            if ( Params->InputBufferData )
-            {
-                printf("INFO: InputData already set! Skipping!\n");
-                i++;
-                continue;
-            }
-            
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No dword data set!\n");
+
+            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
+
             PARSE_ID_NUMBER(Params->InputBufferData, Params->InputBufferSize, 4, s, UINT32, val1);
 
             i++;
         }
         else if ( IS_2C_ARG(arg, 'iq') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No word data set!\n");
-                break;
-            }
-            if ( Params->InputBufferData )
-            {
-                printf("INFO: InputData already set! Skipping!\n");
-                i++;
-                continue;
-            }
-            
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No qword data set!\n");
+
+            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
+
             PARSE_ID_NUMBER(Params->InputBufferData, Params->InputBufferSize, 8, s, UINT64, val1);
 
             i++;
         }
         else if ( IS_2C_ARG(arg, 'ia') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No word data set!\n");
-                break;
-            }
-            if ( Params->InputBufferData )
-            {
-                printf("INFO: InputData already set! Skipping!\n");
-                i++;
-                continue;
-            }
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No ascii string data set!\n");
+
+            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
             cch = (ULONG)strlen(val1);
             cb = cch;
@@ -494,18 +441,9 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'iu') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No word data set!\n");
-                break;
-            }
-            if ( Params->InputBufferData )
-            {
-                printf("INFO: InputData already set! Skipping!\n");
-                i++;
-                continue;
-            }
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No unicode string data set!\n");
+
+            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
             cch = (ULONG)strlen(val1);
             cb = cch * 2;
@@ -524,18 +462,9 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'if') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No word data set!\n");
-                break;
-            }
-            if ( Params->InputBufferData )
-            {
-                printf("INFO: InputData already set! Skipping!\n");
-                i++;
-                continue;
-            }
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No file data set!\n");
+
+            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
             WCHAR val1W[MAX_PATH];
             StringCchPrintfW(val1W, MAX_PATH, L"%hs", val1);
@@ -572,7 +501,7 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
 
             LARGE_INTEGER fileSize = {0};
             b = GetFileSizeEx(file, &fileSize);
-            if ( !b )
+            if ( !b || !fileSize.QuadPart )
             {
                 s = GetLastError();
                 printf("ERROR: Getting file size failed! (0x%x)\n", s);
@@ -595,10 +524,9 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
             Params->InputBufferSize = fileSize.LowPart;
             
             IO_STATUS_BLOCK iosb;
-            RtlSecureZeroMemory(&iosb, sizeof(iosb));
+            RtlZeroMemory(&iosb, sizeof(iosb));
             
             s = NtReadFile(file, NULL, NULL, NULL, &iosb, Params->InputBufferData, Params->InputBufferSize, NULL, NULL);
-    
             if ( s != 0 ) 
             {
                 printf("ERROR: Reading input data failed! (0x%x)\n", s);
@@ -611,36 +539,24 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'da') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: desired access flag set!\n");
-                break;
-            }
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No desired access flag set!\n");
+
             STR_TO_ULONG(Params->DesiredAccess, val1, s);
 
             i++;
         }
         else if ( IS_1C_ARG(arg, 's') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No sleep length set!\n");
-                break;
-            }
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No sleep length set!\n");
+
             STR_TO_ULONG(Params->Sleep, val1, s);
 
             i++;
         }
         else if ( IS_2C_ARG(arg, 'sa') )
         {
-            if ( NOT_A_VALUE(val1) )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: No shareAccess flag set!\n");
-                break;
-            }
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No shareAccess flag set!\n");
+
             STR_TO_ULONG(Params->ShareAccess, val1, s);
 
             i++;
@@ -675,6 +591,11 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
         }
     }
 
+    if ( s != 0 )
+    {
+        printf("\n");
+    }
+
 //clean:
     if ( ntPath )
         free(ntPath);
@@ -684,12 +605,14 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
     return s==0;
 }
 
-int openDevice(PHANDLE Device, CHAR* DeviceNameA, ACCESS_MASK DesiredAccess, ULONG ShareAccess)
+int openDevice(_Out_ PHANDLE Device, _In_ CHAR* DeviceNameA, _In_ ACCESS_MASK DesiredAccess, _In_ ULONG ShareAccess)
 {
     INT s = 0;
     WCHAR deviceNameW[MAX_PATH];
     StringCchPrintfW(deviceNameW, MAX_PATH, L"%hs", DeviceNameA);
     deviceNameW[MAX_PATH-1] = 0;
+
+    *Device = NULL;
 
     s = openFile(Device, deviceNameW, DesiredAccess, ShareAccess);
     if ( s == 0 )
@@ -708,10 +631,10 @@ int openFile(
     _In_ ULONG ShareAccess
 )
 {
-    NTSTATUS status;
+    NTSTATUS status = 0;
     OBJECT_ATTRIBUTES objAttr = { 0 };
     UNICODE_STRING fileNameUS;
-    IO_STATUS_BLOCK iostatusblock;
+    IO_STATUS_BLOCK iostatusblock = { 0 };
 
     RtlInitUnicodeString(&fileNameUS, FileName);
     objAttr.Length = sizeof( objAttr );
@@ -769,16 +692,19 @@ void printArgs(PCmdParams Params)
 {
     printf("Params:\n");
     printf(" - DeviceName: %s\n", Params->DeviceName);
-    printf(" - InputBufferSize: 0x%x\n", Params->InputBufferSize);
-    printf(" - OutputBufferSize: 0x%x\n", Params->OutputBufferSize);
     printf(" - IOCTL: 0x%x\n", Params->IOCTL);
+    printf(" - InputBufferSize: 0x%x\n", Params->InputBufferSize);
     if ( Params->InputBufferData )
     {
         printf(" - InputBufferData:\n");
         PrintMemBytes(Params->InputBufferData, Params->InputBufferSize);
     }
+    printf(" - OutputBufferSize: 0x%x\n", Params->OutputBufferSize);
     printf(" - Sleep: 0x%x\n", Params->Sleep);
     printf(" - TestHandle: %d\n", Params->TestHandle);
+    printf(" - DesiredAccess: 0x%x\n", Params->DesiredAccess);
+    printf(" - ShareAccess: 0x%x\n", Params->ShareAccess);
+    printf(" - FillValue: 0x%x\n", Params->FillValue);
     printf("\n");
 }
 
@@ -791,7 +717,8 @@ void printVersion()
 }
 void printUsage()
 {
-    printf("Usage: Talk.exe /n <DeviceName> [/c <ioctl>] [/is <size>] [/os <size>] [/i(x|b|w|d|q|a|u|f) <data>] [/s <sleep>] [/da <flags>] [/sa <flags>] [/t] [/h]\n");
+    printf("Usage: %s /n <DeviceName> [/c <ioctl>] [/is <size>] [/os <size>] [/i(x|b|w|d|q|a|u|f) <data>] [/s <sleep>] [/da <flags>] [/sa <flags>] [/t] [/h]\n",
+        BIN_NAME);
 }
 
 void printHelp()

@@ -32,6 +32,16 @@
     && _a_[4] == ((_v_&0x000000FF))  \
     && _a_[5] == 0 )
 
+#define BREAK_ON_NOT_A_VALUE(__val__, __s__, __info__) \
+{ \
+    if ( NOT_A_VALUE(__val__) ) \
+    { \
+        __s__ = ERROR_INVALID_PARAMETER; \
+        printf(__info__); \
+        break; \
+    } \
+}
+
 BOOL isAskForHelp(INT argc, CHAR** argv);
 BOOL isArgOfType(const CHAR* arg, const CHAR* type);
 BOOL hasValue(const char* type, int i, int end_i);

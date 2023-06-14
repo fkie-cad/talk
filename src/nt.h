@@ -2,6 +2,7 @@
 #define NT_STUFF_H
 
 #define STATUS_SUCCESS                       ((NTSTATUS)0x00000000L)
+#define STATUS_NOT_IMPLEMENTED               ((NTSTATUS)0x00000002L)
 #define STATUS_OBJECT_PATH_SYNTAX_BAD        ((NTSTATUS)0x0000003BL)
 #define STATUS_NO_SUCH_DEVICE                ((NTSTATUS)0xC000000EL)
 #define STATUS_NO_SUCH_FILE                  ((NTSTATUS)0xC000000FL)
@@ -50,6 +51,8 @@ const char* getStatusString(NTSTATUS status)
 {
     switch (status )
     {
+    case STATUS_NOT_IMPLEMENTED:
+        return "STATUS_NOT_IMPLEMENTED";
     case STATUS_ACCESS_DENIED:
         return "STATUS_ACCESS_DENIED";
     case STATUS_NO_SUCH_DEVICE:

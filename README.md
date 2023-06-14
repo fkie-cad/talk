@@ -65,7 +65,7 @@ A sleep (`/s`) may be useful with asynchronous calls like Beep.
 ### EXAMPLE ###
 Call beep
 ```bash
-$ Talk.exe /n \Device\Beep /c 0x10000 /i 8 /ix 020200003e080000 /s 0x083e
+$ Talk.exe /n \Device\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e
 ```
 
 

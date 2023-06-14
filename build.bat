@@ -1,10 +1,12 @@
 @echo off
+setlocal
 
 set my_name=%~n0
 set my_dir="%~dp0"
 set "my_dir=%my_dir:~1,-2%"
 
 set /a prog=0
+set /a cln=0
 set /a verbose=0
 
 set /a DP_FLAG=1
@@ -36,6 +38,10 @@ GOTO :ParseParams
 
     IF /i "%~1"=="/talk" (
         SET /a prog=1
+        goto reParseParams
+    )
+    IF /i "%~1"=="/cln" (
+        SET /a cln=1
         goto reParseParams
     )
 
@@ -105,26 +111,26 @@ GOTO :ParseParams
         set /a release=1
     )
 
+    set platform=
     if %bitness% == 64 (
         set platform=x64
     )
     if %bitness% == 32 (
         set platform=x86
     )
-    if not %bitness% == 32 (
-        if not %bitness% == 64 (
-            echo ERROR: Bitness /b has to be 32 or 64!
-            EXIT /B 1
-        )
+    if [%platform%] EQU [] (
+        echo ERROR: Bitness /b has to be 32 or 64!
+        EXIT /B 1
     )
 
-    set /a "s=%prog%"
+    set /a "s=%prog%+%cln%"
     if %s% == 0 (
         set /a prog=1
     )
 
     if %verbose% == 1 (
         echo prog: %prog%
+        echo cln: %cln%
         echo.
         echo debug: %debug%
         echo release: %release%
@@ -135,8 +141,14 @@ GOTO :ParseParams
         echo pts: %pts%
     )
 
+    if %cln% == 1 (
+        if %verbose% == 1 echo removing "%my_dir%\build"
+        rmdir /s /q "%my_dir%\build" >nul 2>&1 
+    )
+
     if %prog%==1 call :build %prog_proj%
 
+    endlocal
     exit /B 0
 
 

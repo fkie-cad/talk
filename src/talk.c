@@ -319,7 +319,6 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
 
     for ( i = start_i; i < last_i; i++ )
     {
-            printf("i: 0x%x\n", i);
         arg = argv[i];
         val1 = GET_ARG_VALUE(argc, argv, i, 1);
 

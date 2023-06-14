@@ -11,7 +11,7 @@
 
 #define GET_ARG_VALUE(__argc__, __argv__, __i__, __id__) ( __i__ < __argc__ - __id__ ) ? __argv__[__i__+__id__] : NULL
 #define IS_PARAM(__arg__) (__arg__ != NULL && ( __arg__[0] == LIN_PARAM_IDENTIFIER || __arg__[0] == WIN_PARAM_IDENTIFIER) )
-#define NOT_A_VALUE(__val__) (__val__ == NULL || __val__[0] == LIN_PARAM_IDENTIFIER || __val__[0] == WIN_PARAM_IDENTIFIER)
+#define IS_VALUE(__val__) (__val__ != NULL)
 #define IS_1C_ARG(_a_, _v_) ( ( _a_[0] == LIN_PARAM_IDENTIFIER || _a_[0] == WIN_PARAM_IDENTIFIER ) && _a_[1] == _v_ && _a_[2] == 0 )
 #define IS_2C_ARG(_a_, _v_) \
     ( ( _a_[0] == LIN_PARAM_IDENTIFIER || _a_[0] == WIN_PARAM_IDENTIFIER ) \
@@ -34,10 +34,10 @@
 
 #define BREAK_ON_NOT_A_VALUE(__val__, __s__, __info__) \
 { \
-    if ( NOT_A_VALUE(__val__) ) \
+    if ( ! IS_VALUE(__val__) ) \
     { \
         __s__ = ERROR_INVALID_PARAMETER; \
-        printf(__info__); \
+        printf("%s", __info__); \
         break; \
     } \
 }
@@ -54,8 +54,8 @@ BOOL isAskForHelp(INT argc, CHAR** argv)
     int i = 1;
     if ( argc < i+1 )
         return FALSE;
-
-    return isArgOfType(argv[i], "h") || IS_1C_ARG(argv[i], '?');
+    
+    return IS_1C_ARG(argv[i], 'h') || IS_1C_ARG(argv[i], '?');
 }
 
 BOOL isArgOfType(const CHAR* arg, const CHAR* type)

@@ -9,8 +9,14 @@ int parseUint8(const char* arg, UINT8* value, UINT8 base);
 int parseUint64(const char* arg, ULONGLONG* value, UINT8 base);
 
 
-#define IS_NUM(__char__) \
+#define IS_NUM_CHAR(__char__) \
     ( __char__ >= '0' && __char__ <= '9' )
+
+#define IS_LC_HEX_CHAR(__char__) \
+    ( __char__ >= 'a' && __char__ <= 'f' )
+
+#define IS_UC_HEX_CHAR(__char__) \
+    ( __char__ >= 'A' && __char__ <= 'F' )
 
 #define IN_HEX_RANGE(__char__) \
     ( IS_NUM(__char__) || ( __char__ >= 'a' && __char__ <= 'f' )  || ( __char__ >= 'A' && __char__ <= 'F' ) )
@@ -64,7 +70,7 @@ INT parsePlainBytes(
         p = (PUINT8) malloc(buffer_ln);
         if ( p == NULL )
         {
-            printf("Error: No memory!\n");
+            printf("ERROR: No memory!\n");
             return GetLastError();
         }
         malloced = TRUE;
@@ -76,26 +82,31 @@ INT parsePlainBytes(
 
     for ( i = 0, j = 0; i < arg_ln; i += 2, j++ )
     {
-        if ( !IN_HEX_RANGE(Raw[i]) || !IN_HEX_RANGE(Raw[i+1]) )
+        if ( IS_NUM_CHAR(Raw[i]) )
+            m1 = 0x30;
+        else if ( IS_UC_HEX_CHAR(Raw[i]) )
+            m1 = 0x37;
+        else if ( IS_LC_HEX_CHAR(Raw[i]) )
+            m1 = 0x57;
+        else
         {
             s = ERROR_INVALID_PARAMETER;
-            printf("Error: Byte string not in hex range!\n");
+            printf("ERROR: Byte string not in hex range!\n");
             break;
         }
-
-        if ( Raw[i] <= 0x39 )
-            m1 = 0x30;
-        else if ( Raw[i] <= 0x46 )
-            m1 = 0x37;
-        else
-            m1 = 0x57;
-
-        if ( Raw[i+1] <= 0x39 )
+        
+        if ( IS_NUM_CHAR(Raw[i+1]) )
             m2 = 0x30;
-        else if ( Raw[i+1] <= 0x46 )
+        else if ( IS_UC_HEX_CHAR(Raw[i+1]) )
             m2 = 0x37;
-        else
+        else if ( IS_LC_HEX_CHAR(Raw[i+1]) )
             m2 = 0x57;
+        else
+        {
+            s = ERROR_INVALID_PARAMETER;
+            printf("ERROR: Byte string not in hex range!\n");
+            break;
+        }
 
         p[j] = ((Raw[i] - m1)<<4) | ((Raw[i+1] - m2) & 0x0F);
     }

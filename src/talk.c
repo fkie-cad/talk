@@ -13,8 +13,8 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.1.0"
-#define LAST_CHANGED "25.04.2023"
+#define VERSION "2.1.1"
+#define LAST_CHANGED "05.10.2023"
 
 
 #define FLAG_VERBOSE        (0x01)
@@ -102,15 +102,23 @@ int _cdecl main(int argc, char** argv)
         return -1;
     }
 
-    
-    printArgs(&params);
+    if ( params.Flags & FLAG_VERBOSE )
+        printArgs(&params);
 
 
     s = openDevice(&device, params.DeviceName, params.DesiredAccess, params.ShareAccess);
-    if ( s != 0 )
-        return s;
-    if ( params.TestHandle )
+    if ( s != 0 || params.TestHandle )
+    {
         goto clean;
+    }
+    else
+    {
+        if ( params.Flags & FLAG_VERBOSE )
+        {
+            printf("device: %p\n", device);
+            printf("\n");
+        }
+    }
 
     s = generateIoRequest(device, &params);
 
@@ -174,10 +182,10 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     }
 
     status = NtCreateEvent(&event,
-        FILE_ALL_ACCESS,
-        0,
-        0,
-        0);
+                           FILE_ALL_ACCESS,
+                           0,
+                           0,
+                           0);
     if ( status != STATUS_SUCCESS )
     {
         printf("ERROR (0x%08x): Create event failed (%s).\n", status, getStatusString(status));
@@ -204,7 +212,9 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
 
     if ( !NT_SUCCESS(status) )
     {
-        printf("ERROR (0x%08x): Sorry, the driver is present but does not want to answer.\n %s.\n", status, getStatusString(status));
+        printf("ERROR (0x%08x): Sorry, the driver is present but does not want to answer.\n"
+               " %s.\n", 
+               status, getStatusString(status));
         printf(" iosb info: 0x%08x\n", (ULONG)iosb.Information);
         goto clean;
     };
@@ -584,6 +594,10 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
         {
             Params->Flags |= FLAG_PRINT_COLS_64;
         }
+        else if ( IS_1C_ARG(arg, 'v') )
+        {
+            Params->Flags |= FLAG_VERBOSE;
+        }
         else
         {
             printf("INFO: Unknown arg type \"%s\"\n", argv[i]);
@@ -614,11 +628,6 @@ int openDevice(_Out_ PHANDLE Device, _In_ CHAR* DeviceNameA, _In_ ACCESS_MASK De
     *Device = NULL;
 
     s = openFile(Device, deviceNameW, DesiredAccess, ShareAccess);
-    if ( s == 0 )
-    {
-        printf("device: %p\n", *Device);
-        printf("\n");
-    }
 
     return s;
 }
@@ -656,7 +665,7 @@ int openFile(
             );
     if ( !NT_SUCCESS(status) )
     {
-        printf("Error: Open file failed! (0x%x) [%s].\n", status, getStatusString(status));
+        printf("ERROR: Open file failed! (0x%x) [%s].\n", status, getStatusString(status));
         return status;
     }
 

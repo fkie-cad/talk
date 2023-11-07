@@ -1,17 +1,18 @@
 # Talk
+
 Talks to a device using NtDeviceIoControl.
 
 
-## Version ##
-2.1.0  
-Last changed: 25.04.2023
+## Version
+2.1.1  
+Last changed: 07.11.2023
 
 
-## REQUIREMENTS ##
+## REQUIREMENTS
 - msbuild
 
 
-## BUILD ##
+## BUILD
 ```bash
 $devcmd> build.bat [/?]
 // or
@@ -23,7 +24,7 @@ $devcmd> msbuild talk.vcxproj /p:Platform=x64 /p:Configuration=Release
 $devcmd> msbuild [talk.vcxproj] [/p:Platform=x86|x64] [/p:Configuration=Debug|Release] [/p:RunTimeLib=Debug|Release] [/p:PDB=0|1]
 ```
 
-## USAGE ##
+## USAGE
 ```bash
 $ Talk.exe /n DeviceName [/c <ioctl>] [/is <size>] [/os <size>] [/i(x|b|w|d|q|a|u|f) <data>] [/s sleep] [/da <flags>] [/sa <flags>] [/t] [/h]
 ```
@@ -62,18 +63,18 @@ If no input data (`/i*`) but an input length (`/is`) is given, the buffer will b
 If input data (`/i*`) is given, the input length will be set to its size, independent of a size possibly set with `/is`.  
 A sleep (`/s`) may be useful with asynchronous calls like Beep.  
 
-### EXAMPLE ###
+
+### EXAMPLE
 Call beep
 ```bash
 $ Talk.exe /n \Device\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e
 ```
 
 
-## COPYRIGHT, CREDITS & CONTACT ## 
+## COPYRIGHT, CREDITS & CONTACT
 Published under [GNU GENERAL PUBLIC LICENSE](LICENSE).
 
-#### Author ####
-- Viviane Zwanger ([viviane.zwanger@fkie.fraunhofer.de](viviane.zwanger@fkie.fraunhofer.de))
 
-#### Author ####
-- Henning Braun ([henning.braun@fkie.fraunhofer.de](henning.braun@fkie.fraunhofer.de)) 
+#### Authors
+- Viviane Zwanger ([viviane.zwanger@fkie.fraunhofer.de](mailto:viviane.zwanger@fkie.fraunhofer.de))
+- Henning Braun ([henning.braun@fkie.fraunhofer.de](mailto:henning.braun@fkie.fraunhofer.de)) 

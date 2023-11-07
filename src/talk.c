@@ -107,8 +107,13 @@ int _cdecl main(int argc, char** argv)
 
 
     s = openDevice(&device, params.DeviceName, params.DesiredAccess, params.ShareAccess);
-    if ( s != 0 || params.TestHandle )
+    if ( s != 0 )
     {
+        goto clean;
+    }
+    else if ( params.TestHandle )
+    {
+        printf("Device opened succcessfully: %p\n", device);
         goto clean;
     }
     else
@@ -177,7 +182,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     if ( inputBuffer )
     {
         printf(" - inputBuffer:\n");
-        PrintMemCols8(inputBuffer, Params->InputBufferSize);
+        PrintMemCols8(inputBuffer, Params->InputBufferSize, 0);
         printf("\n");
     }
 
@@ -194,16 +199,18 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
 
     RtlZeroMemory(&iosb, sizeof(iosb));
 
-    status = NtDeviceIoControlFile(Device,
-        event,
-        NULL,
-        NULL,
-        &iosb,
-        Params->IOCTL,
-        inputBuffer,
-        Params->InputBufferSize,
-        outputBuffer,
-        Params->OutputBufferSize);
+    status = NtDeviceIoControlFile(
+                Device,
+                event,
+                NULL,
+                NULL,
+                &iosb,
+                Params->IOCTL,
+                inputBuffer,
+                Params->InputBufferSize,
+                outputBuffer,
+                Params->OutputBufferSize
+            );
 
     if ( status == STATUS_PENDING )
     {
@@ -236,19 +243,19 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
         }
         else if ( Params->Flags & FLAG_PRINT_COLS_8 )
         {
-            PrintMemCols8(outputBuffer, bytesReturned);
+            PrintMemCols8(outputBuffer, bytesReturned, 0);
         }
         else if ( Params->Flags & FLAG_PRINT_COLS_16 )
         {
-            PrintMemCols16(outputBuffer, bytesReturned);
+            PrintMemCols16(outputBuffer, bytesReturned, 0);
         }
         else if ( Params->Flags & FLAG_PRINT_COLS_32 )
         {
-            PrintMemCols32(outputBuffer, bytesReturned);
+            PrintMemCols32(outputBuffer, bytesReturned, 0);
         }
         else if ( Params->Flags & FLAG_PRINT_COLS_64 )
         {
-            PrintMemCols64(outputBuffer, bytesReturned);
+            PrintMemCols64(outputBuffer, bytesReturned, 0);
         }
 #pragma warning ( default : 6385 )
     }
@@ -645,7 +652,7 @@ int openFile(
     IO_STATUS_BLOCK iostatusblock = { 0 };
 
     RtlInitUnicodeString(&fileNameUS, FileName);
-    objAttr.Length = sizeof( objAttr );
+    objAttr.Length = sizeof(objAttr);
     objAttr.ObjectName = &fileNameUS;
     
     *File = NULL;

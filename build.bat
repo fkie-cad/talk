@@ -15,8 +15,8 @@ set /a EP_FLAG=2
 set /a debug=0
 set /a release=0
 set /a bitness=64
-set /a pdb=0
 set /a debug_print=0
+set /a pdb=0
 set /a rtl=0
 set platform=x64
 set configuration=Debug
@@ -169,8 +169,8 @@ GOTO :ParseParams
         set conf=%~3
         set /a dpf=%~4
         set rtl=%~5
-        set pdb=%~6
-        set pte=%~7
+        set /a pdb=%~6
+        set pts=%~7
         
         :: print flags
         set /a "dp=%dpf%&~EP_FLAG"

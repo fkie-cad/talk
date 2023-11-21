@@ -14,16 +14,18 @@
 
 #define BIN_NAME "Talk"
 #define VERSION "2.1.1"
-#define LAST_CHANGED "05.10.2023"
+#define LAST_CHANGED "07.11.2023"
 
 
 #define FLAG_VERBOSE        (0x01)
-#define FLAG_PRINT_B        (0x02)
-#define FLAG_PRINT_COLS_8   (0x04)
-#define FLAG_PRINT_COLS_16  (0x08)
-#define FLAG_PRINT_COLS_32  (0x10)
-#define FLAG_PRINT_COLS_64  (0x20)
 
+#define PRINT_MODE_BYTES    (0x01) // 001
+#define PRINT_MODE_COLS_8   (0x02) // 010
+#define PRINT_MODE_COLS_16  (0x03) // 011
+#define PRINT_MODE_COLS_32  (0x04) // 100
+#define PRINT_MODE_COLS_64  (0x05) // 101
+
+#define PRINT_MODE_MAX  PRINT_MODE_COLS_64 
 
 #define DEFAULT_FILL_VALUE ('A')
 
@@ -37,7 +39,11 @@ typedef struct CmdParams {
     ULONG Sleep;
     ACCESS_MASK DesiredAccess;
     ULONG ShareAccess;
-    ULONG Flags;
+    struct {
+        ULONG Verbose:1;
+        ULONG PrintMode:3;
+        ULONG Reserved:28;
+    } Flags;
     BOOL TestHandle;
     CHAR FillValue;
 } CmdParams, * PCmdParams;
@@ -102,7 +108,7 @@ int _cdecl main(int argc, char** argv)
         return -1;
     }
 
-    if ( params.Flags & FLAG_VERBOSE )
+    if ( params.Flags.Verbose )
         printArgs(&params);
 
 
@@ -118,7 +124,7 @@ int _cdecl main(int argc, char** argv)
     }
     else
     {
-        if ( params.Flags & FLAG_VERBOSE )
+        if ( params.Flags.Verbose )
         {
             printf("device: %p\n", device);
             printf("\n");
@@ -179,7 +185,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
 
     printf("Launching I/O Request Packet...\n");
 
-    if ( inputBuffer )
+    if ( inputBuffer && Params->Flags.Verbose )
     {
         printf(" - inputBuffer:\n");
         PrintMemCols8(inputBuffer, Params->InputBufferSize, 0);
@@ -219,7 +225,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
 
     if ( !NT_SUCCESS(status) )
     {
-        printf("ERROR (0x%08x): Sorry, the driver is present but does not want to answer.\n"
+        printf("ERROR (0x%08x): DeviceIo failed!\n"
                " %s.\n", 
                status, getStatusString(status));
         printf(" iosb info: 0x%08x\n", (ULONG)iosb.Information);
@@ -227,7 +233,12 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     };
 
     if ( Params->Sleep )
+    {
+        if ( Params->Flags.Verbose )
+            printf("Sleeping for 0x%x (%u) ms.\n", Params->Sleep, Params->Sleep);
+
         Sleep(Params->Sleep);
+    }
 
     printf("\n");
     printf("Answer received.\n----------------\n");
@@ -237,25 +248,23 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     {
 // warning C6385: Reading invalid data from 'outputBuffer':  the readable size is 'Params->OutputBufferSize' bytes, but '2' bytes may be read ??
 #pragma warning ( disable : 6385 )
-        if ( Params->Flags & FLAG_PRINT_B )
+        switch ( Params->Flags.PrintMode )
         {
-            PrintMemBytes(outputBuffer, bytesReturned);
-        }
-        else if ( Params->Flags & FLAG_PRINT_COLS_8 )
-        {
-            PrintMemCols8(outputBuffer, bytesReturned, 0);
-        }
-        else if ( Params->Flags & FLAG_PRINT_COLS_16 )
-        {
-            PrintMemCols16(outputBuffer, bytesReturned, 0);
-        }
-        else if ( Params->Flags & FLAG_PRINT_COLS_32 )
-        {
-            PrintMemCols32(outputBuffer, bytesReturned, 0);
-        }
-        else if ( Params->Flags & FLAG_PRINT_COLS_64 )
-        {
-            PrintMemCols64(outputBuffer, bytesReturned, 0);
+            case PRINT_MODE_BYTES:
+                PrintMemBytes(outputBuffer, bytesReturned);
+                break;
+            case PRINT_MODE_COLS_16:
+                PrintMemCols16(outputBuffer, bytesReturned, 0);
+                break;
+            case PRINT_MODE_COLS_32:
+                PrintMemCols32(outputBuffer, bytesReturned, 0);
+                break;
+            case PRINT_MODE_COLS_64:
+                PrintMemCols64(outputBuffer, bytesReturned, 0);
+                break;
+            default:
+                PrintMemCols8(outputBuffer, bytesReturned, 0);
+                break;
         }
 #pragma warning ( default : 6385 )
     }
@@ -583,27 +592,27 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'pb') )
         {
-            Params->Flags |= FLAG_PRINT_B;
+            Params->Flags.PrintMode = PRINT_MODE_BYTES;
         }
         else if ( IS_3C_ARG(arg, 'pc8') )
         {
-            Params->Flags |= FLAG_PRINT_COLS_8;
+            Params->Flags.PrintMode = PRINT_MODE_COLS_8;
         }
         else if ( IS_4C_ARG(arg, 'pc16') )
         {
-            Params->Flags |= FLAG_PRINT_COLS_16;
+            Params->Flags.PrintMode = PRINT_MODE_COLS_16;
         }
         else if ( IS_4C_ARG(arg, 'pc32') )
         {
-            Params->Flags |= FLAG_PRINT_COLS_32;
+            Params->Flags.PrintMode = PRINT_MODE_COLS_32;
         }
         else if ( IS_4C_ARG(arg, 'pc64') )
         {
-            Params->Flags |= FLAG_PRINT_COLS_64;
+            Params->Flags.PrintMode = PRINT_MODE_COLS_64;
         }
         else if ( IS_1C_ARG(arg, 'v') )
         {
-            Params->Flags |= FLAG_VERBOSE;
+            Params->Flags.Verbose = 1;
         }
         else
         {
@@ -688,14 +697,8 @@ BOOL checkArgs(CmdParams* Params)
         s = -1;
     }
     
-    ULONG f = Params->Flags&(FLAG_PRINT_B|FLAG_PRINT_COLS_8|FLAG_PRINT_COLS_16|FLAG_PRINT_COLS_32|FLAG_PRINT_COLS_64);
-    if ( ( (f & (f-1)) != 0 ) )
-    {
-        printf("ERROR: No valid printing mode!\n");
-        s = -1;
-    }
-    if ( f == 0 )
-        Params->Flags |= FLAG_PRINT_COLS_8;
+    if ( Params->Flags.PrintMode == 0 || Params->Flags.PrintMode > PRINT_MODE_MAX )
+        Params->Flags.PrintMode = PRINT_MODE_COLS_8;
 
     if ( s != 0 )
         printf("\n");

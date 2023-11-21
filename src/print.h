@@ -51,7 +51,7 @@
 }
 
 #define PrintMemCols16(_b_, _s_, _a_) \
-{\
+{ \
     UINT64 _hw_v_ = (SIZE_T)_a_ + _s_; \
     UINT8 _hw_w_ = 0x10; \
     HEX_CHAR_WIDTH(_hw_v_, _hw_w_); \
@@ -124,4 +124,45 @@
         printf("%02x ", ((PUINT8)_b_)[_i_]); \
     } \
     printf("\n"); \
+}
+
+const char* getStatusString(NTSTATUS status)
+{
+    switch ( status )
+    {
+        case STATUS_NOT_IMPLEMENTED:
+            return "STATUS_NOT_IMPLEMENTED";
+        case STATUS_ACCESS_DENIED:
+            return "STATUS_ACCESS_DENIED";
+        case STATUS_NO_SUCH_DEVICE:
+            return "STATUS_NO_SUCH_DEVICE";
+        case STATUS_INVALID_PARAMETER:
+            return "STATUS_INVALID_PARAMETER";
+        case STATUS_NO_SUCH_FILE:
+            return "STATUS_NO_SUCH_FILE";
+        case STATUS_INVALID_DEVICE_REQUEST:
+            return "STATUS_INVALID_DEVICE_REQUEST: The specified request is not a valid operation for the target device";
+        case STATUS_ILLEGAL_FUNCTION:
+            return "STATUS_ILLEGAL_FUNCTION: kernel driver is irritated";
+        case STATUS_INVALID_HANDLE:
+            return "STATUS_INVALID_HANDLE";
+        case STATUS_DATATYPE_MISALIGNMENT_ERROR:
+            return "STATUS_DATATYPE_MISALIGNMENT_ERROR: A data type misalignment error was detected in a load or store instruction";
+        case STATUS_NOT_SUPPORTED:
+            return "STATUS_NOT_SUPPORTED: The request is not supported";
+        case STATUS_OBJECT_NAME_INVALID:
+            return "STATUS_OBJECT_NAME_INVALID";
+        case STATUS_OBJECT_NAME_NOT_FOUND:
+            return "STATUS_OBJECT_NAME_NOT_FOUND";
+        case STATUS_OBJECT_NAME_COLLISION:
+            return "STATUS_OBJECT_NAME_COLLISION";
+        case STATUS_OBJECT_PATH_NOT_FOUND:
+            return "STATUS_OBJECT_PATH_NOT_FOUND";
+        case STATUS_OBJECT_PATH_SYNTAX_BAD:
+            return "STATUS_OBJECT_PATH_SYNTAX_BAD";
+        case STATUS_NOT_FOUND:
+            return "STATUS_NOT_FOUND: The object was not found";
+        default:
+            return "Unknown status code";
+    }
 }

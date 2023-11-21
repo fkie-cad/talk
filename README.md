@@ -7,12 +7,20 @@ Talks to a device using NtDeviceIoControl.
 2.1.1  
 Last changed: 07.11.2023
 
+## Contents
+* [Requirements](#requirements)
+* [Build](#build)
+* [Usage](#usage)
+* [Example](#example)
+* [Copyright, Credits & Contact](#copyright,-credits-&-contact)
+* [Authors](#authors)
 
-## REQUIREMENTS
+
+## Requirements
 - msbuild
 
 
-## BUILD
+## Build
 ```bash
 $devcmd> build.bat [/?]
 // or
@@ -24,7 +32,7 @@ $devcmd> msbuild talk.vcxproj /p:Platform=x64 /p:Configuration=Release
 $devcmd> msbuild [talk.vcxproj] [/p:Platform=x86|x64] [/p:Configuration=Debug|Release] [/p:RunTimeLib=Debug|Release] [/p:PDB=0|1]
 ```
 
-## USAGE
+## Usage
 ```bash
 $ Talk.exe /n DeviceName [/c <ioctl>] [/is <size>] [/os <size>] [/i(x|b|w|d|q|a|u|f) <data>] [/s sleep] [/da <flags>] [/sa <flags>] [/t] [/h]
 ```
@@ -64,14 +72,14 @@ If input data (`/i*`) is given, the input length will be set to its size, indepe
 A sleep (`/s`) may be useful with asynchronous calls like Beep.  
 
 
-### EXAMPLE
+### Example
 Call beep
 ```bash
 $ Talk.exe /n \Device\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e
 ```
 
 
-## COPYRIGHT, CREDITS & CONTACT
+## Copyright, Credits & Contact
 Published under [GNU GENERAL PUBLIC LICENSE](LICENSE).
 
 

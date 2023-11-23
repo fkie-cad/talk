@@ -17,8 +17,6 @@
 #define LAST_CHANGED "07.11.2023"
 
 
-#define FLAG_VERBOSE        (0x01)
-
 #define PRINT_MODE_BYTES    (0x01) // 001
 #define PRINT_MODE_COLS_8   (0x02) // 010
 #define PRINT_MODE_COLS_16  (0x03) // 011

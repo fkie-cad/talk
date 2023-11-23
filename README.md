@@ -66,6 +66,9 @@ $ Talk.exe /n DeviceName [/c <ioctl>] [/is <size>] [/os <size>] [/i(x|b|w|d|q|a|
 - /pc32 Print in cols of Address | dwords
 - /pc64 Print in cols of Address | qwords
 
+**Misc**
+- /v More verbose output.
+
 **Remarks**  
 If no input data (`/i*`) but an input length (`/is`) is given, the buffer will be filled with As (0x41).  
 If input data (`/i*`) is given, the input length will be set to its size, independent of a size possibly set with `/is`.  

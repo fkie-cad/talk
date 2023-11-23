@@ -733,7 +733,7 @@ void printVersion()
 }
 void printUsage()
 {
-    printf("Usage: %s /n <DeviceName> [/c <ioctl>] [/is <size>] [/os <size>] [/i(x|b|w|d|q|a|u|f) <data>] [/s <sleep>] [/da <flags>] [/sa <flags>] [/t] [/h]\n",
+    printf("Usage: %s /n <DeviceName> [/c <ioctl>] [/is <size>] [/os <size>] [/i(x|b|w|d|q|a|u|f) <data>] [/s <sleep>] [/da <flags>] [/sa <flags>] [/t] [/v] [/h]\n",
         BIN_NAME);
 }
 
@@ -767,6 +767,7 @@ void printHelp()
     printf("    * /pc16 Print in cols of Address | words | utf-16 chars.\n");
     printf("    * /pc32 Print in cols of Address | dwords.\n");
     printf("    * /pc64 Print in cols of Address | qwords.\n");
+    printf(" - /v More verbose output.\n");
     printf("\n");
     printf("Example:\n");
     printf("$ Talk.exe /n \\Device\\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e\n");

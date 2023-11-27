@@ -11,9 +11,9 @@ Last changed: 27.11.2023
 * [Requirements](#requirements)
 * [Build](#build)
 * [Usage](#usage)
-* [Example](#example)
+    * [Example](#example)
 * [Copyright, Credits & Contact](#copyright,-credits-&-contact)
-* [Authors](#authors)
+    * [Authors](#authors)
 
 
 ## Requirements
@@ -34,13 +34,12 @@ $devcmd> msbuild [talk.vcxproj] [/p:Platform=x86|x64] [/p:Configuration=Debug|Re
 
 ## Usage
 ```bash
-$ Talk.exe /n DeviceName [/c <ioctl>] [/is <size>] [/os <size>] [/i(x|b|w|d|q|a|u|f) <data>] [/s sleep] [/da <flags>] [/sa <flags>] [/t] [/h]
+$ Talk.exe /n DeviceName [/c <ioctl>] [/os <size>] [/is|/ir <size> | /i(x|b|w|d|q|a|u) <data> | /if <file>] [/s sleep] [/da <flags>] [/sa <flags>] [/t] [/v] [/h]
 ```
 
 **Options**
 - /n DeviceName to call. I.e. "\Device\Beep"
 - /c The desired IOCTL.
-- /is Size of InputBuffer, if not filled with the data options. Will be filled with 'A's.
 - /os Size of OutputBuffer.
 
 **Input Data**
@@ -52,6 +51,9 @@ $ Talk.exe /n DeviceName [/c <ioctl>] [/is <size>] [/os <size>] [/i(x|b|w|d|q|a|
 - /ia Input data as ascii text.
 - /iu Input data as unicode (utf-16) text.
 - /if Input data from binary file.
+- /if Input data is read from the binary file from <path>.
+- /ir Input data will be filled with <size> random bytes.
+- /is Input data will be filled with <size> 'A's.
 
  **Other**
 - /s Duration of a possible sleep after device io.
@@ -70,8 +72,6 @@ $ Talk.exe /n DeviceName [/c <ioctl>] [/is <size>] [/os <size>] [/i(x|b|w|d|q|a|
 - /v More verbose output.
 
 **Remarks**  
-If no input data (`/i*`) but an input length (`/is`) is given, the buffer will be filled with As (0x41).  
-If input data (`/i*`) is given, the input length will be set to its size, independent of a size possibly set with `/is`.  
 A sleep (`/s`) may be useful with asynchronous calls like Beep.  
 
 
@@ -86,6 +86,6 @@ $ Talk.exe /n \Device\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e
 Published under [GNU GENERAL PUBLIC LICENSE](LICENSE).
 
 
-#### Authors
+### Authors
 - Viviane Zwanger ([viviane.zwanger@fkie.fraunhofer.de](mailto:viviane.zwanger@fkie.fraunhofer.de))
 - Henning Braun ([henning.braun@fkie.fraunhofer.de](mailto:henning.braun@fkie.fraunhofer.de)) 

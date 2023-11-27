@@ -800,7 +800,7 @@ void printHelp()
     printf("    * /iu <Data> as unicode (utf-16) text.\n");
     printf("    * /if Input data is read from the binary file from <path>.\n");
     printf("    * /ir Input data will be filled with <size> random bytes.\n");
-    printf("    * /is Input data will be filled with <size> 'A's\n");
+    printf("    * /is Input data will be filled with <size> 'A's.\n");
     printf(" - /s Duration of a possible sleep after device io\n");
     printf(" - /t Just test the device for accessibility. Don't send data.\n");
     printf(" - /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x%x.\n", (FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE));

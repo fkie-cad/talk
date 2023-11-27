@@ -126,42 +126,32 @@
     printf("\n"); \
 }
 
+#define STATUS_CASE(__status__) \
+    case __status__: return #__status__;
+#define STATUS_CASE_DESC(__status__, __desc__) \
+    case __status__: return __desc__;
+
 const char* getStatusString(NTSTATUS status)
 {
     switch ( status )
     {
-        case STATUS_NOT_IMPLEMENTED:
-            return "STATUS_NOT_IMPLEMENTED";
-        case STATUS_INVALID_HANDLE:
-            return "STATUS_INVALID_HANDLE";
-        case STATUS_INVALID_PARAMETER:
-            return "STATUS_INVALID_PARAMETER";
-        case STATUS_NO_SUCH_DEVICE:
-            return "STATUS_NO_SUCH_DEVICE";
-        case STATUS_NO_SUCH_FILE:
-            return "STATUS_NO_SUCH_FILE";
-        case STATUS_INVALID_DEVICE_REQUEST:
-            return "STATUS_INVALID_DEVICE_REQUEST: The specified request is not a valid operation for the target device";
-        case STATUS_ACCESS_DENIED:
-            return "STATUS_ACCESS_DENIED";
-        case STATUS_OBJECT_NAME_INVALID:
-            return "STATUS_OBJECT_NAME_INVALID";
-        case STATUS_OBJECT_NAME_NOT_FOUND:
-            return "STATUS_OBJECT_NAME_NOT_FOUND";
-        case STATUS_OBJECT_NAME_COLLISION:
-            return "STATUS_OBJECT_NAME_COLLISION";
-        case STATUS_OBJECT_PATH_NOT_FOUND:
-            return "STATUS_OBJECT_PATH_NOT_FOUND";
-        case STATUS_OBJECT_PATH_SYNTAX_BAD:
-            return "STATUS_OBJECT_PATH_SYNTAX_BAD";
-        case STATUS_ILLEGAL_FUNCTION:
-            return "STATUS_ILLEGAL_FUNCTION: kernel driver is irritated";
-        case STATUS_NOT_SUPPORTED:
-            return "STATUS_NOT_SUPPORTED: The request is not supported";
-        case STATUS_NOT_FOUND:
-            return "STATUS_NOT_FOUND: The object was not found";
-        case STATUS_DATATYPE_MISALIGNMENT_ERROR:
-            return "STATUS_DATATYPE_MISALIGNMENT_ERROR: A data type misalignment error was detected in a load or store instruction";
+        STATUS_CASE(STATUS_NOT_IMPLEMENTED)
+        STATUS_CASE(STATUS_INVALID_HANDLE)
+        STATUS_CASE(STATUS_INVALID_PARAMETER)
+        STATUS_CASE(STATUS_NO_SUCH_DEVICE)
+        STATUS_CASE(STATUS_NO_SUCH_FILE)
+        STATUS_CASE(STATUS_INVALID_DEVICE_REQUEST)
+        STATUS_CASE(STATUS_ACCESS_DENIED)
+        STATUS_CASE(STATUS_OBJECT_TYPE_MISMATCH)
+        STATUS_CASE(STATUS_OBJECT_NAME_INVALID)
+        STATUS_CASE(STATUS_OBJECT_NAME_NOT_FOUND)
+        STATUS_CASE(STATUS_OBJECT_NAME_COLLISION)
+        STATUS_CASE(STATUS_OBJECT_PATH_NOT_FOUND)
+        STATUS_CASE(STATUS_OBJECT_PATH_SYNTAX_BAD)
+        STATUS_CASE_DESC(STATUS_ILLEGAL_FUNCTION, "STATUS_ILLEGAL_FUNCTION: The specified handle is not open to the server end of the named pipe.")
+        STATUS_CASE(STATUS_NOT_SUPPORTED)
+        STATUS_CASE(STATUS_NOT_FOUND)
+        STATUS_CASE_DESC(STATUS_DATATYPE_MISALIGNMENT_ERROR, "STATUS_DATATYPE_MISALIGNMENT_ERROR: A data type misalignment error was detected in a load or store instruction")
         default:
             return "Unknown status code";
     }

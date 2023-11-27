@@ -9,12 +9,13 @@
 #include "Converter.h"
 #include "Args.h"
 #include "print.h"
+#include "crypto/BRand.h"
 
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.1.1"
-#define LAST_CHANGED "07.11.2023"
+#define VERSION "2.1.2"
+#define LAST_CHANGED "27.11.2023"
 
 
 #define PRINT_MODE_BYTES    (0x01) // 001
@@ -82,17 +83,11 @@ int _cdecl main(int argc, char** argv)
     CmdParams params;
     INT s;
 
-
     if ( isAskForHelp(argc, argv) )
     {
         printHelp();
         return 0;
     }
-    
-    ZeroMemory(&params, sizeof(CmdParams));
-    params.DesiredAccess = FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE;
-    params.ShareAccess = FILE_SHARE_READ|FILE_SHARE_WRITE;
-    params.FillValue = DEFAULT_FILL_VALUE;
 
     if ( !parseArgs(argc, argv, &params) )
     {
@@ -340,6 +335,11 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
 
     PWCHAR ntPath = NULL;
     HANDLE file = NULL;
+    
+    ZeroMemory(Params, sizeof(CmdParams));
+    Params->DesiredAccess = FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE;
+    Params->ShareAccess = FILE_SHARE_READ|FILE_SHARE_WRITE;
+    Params->FillValue = DEFAULT_FILL_VALUE;
 
     for ( i = start_i; i < last_i; i++ )
     {
@@ -354,21 +354,6 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
             BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No name set!\n");
 
             Params->DeviceName = val1;
-            i++;
-        }
-        else if ( IS_2C_ARG(arg, 'is') )
-        {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No input length set!\n");
-
-            if ( Params->InputBufferData )
-            {
-                printf("INFO: InputData size already set! Skipping!\n");
-                i++;
-                continue;
-            }
-
-            STR_TO_ULONG(Params->InputBufferSize, val1, s);
-
             i++;
         }
         else if ( IS_2C_ARG(arg, 'os') )
@@ -560,6 +545,51 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
 
             i++;
         }
+        else if ( IS_2C_ARG(arg, 'ir') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No random length set!\n");
+
+            if ( Params->InputBufferData )
+            {
+                printf("INFO: InputData size already set! Skipping!\n");
+                i++;
+                continue;
+            }
+
+            STR_TO_ULONG(Params->InputBufferSize, val1, s);
+            Params->InputBufferData = malloc(Params->InputBufferSize);
+            if ( !Params->InputBufferData )
+            {
+                s = ERROR_NOT_ENOUGH_MEMORY;
+                printf("ERROR: No memory for input data!\n");
+                Params->InputBufferSize = 0;
+                break;
+            }
+
+            genRand(Params->InputBufferData, Params->InputBufferSize);
+            if ( s != 0 )
+            {
+                printf("ERROR: Generating random failed!\n");
+                break;
+            }
+
+            i++;
+        }
+        else if ( IS_2C_ARG(arg, 'is') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No input length set!\n");
+
+            if ( Params->InputBufferData )
+            {
+                printf("INFO: InputData size already set! Skipping!\n");
+                i++;
+                continue;
+            }
+
+            STR_TO_ULONG(Params->InputBufferSize, val1, s);
+
+            i++;
+        }
         else if ( IS_2C_ARG(arg, 'da') )
         {
             BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No desired access flag set!\n");
@@ -622,8 +652,20 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
     {
         printf("\n");
     }
+    
+    if ( Params->InputBufferSize > 0 && !Params->InputBufferData )
+    {
+        Params->InputBufferData = malloc(Params->InputBufferSize);
+        if ( !Params->InputBufferData )
+        {
+            s = GetLastError();
+            printf("Error (0x%08x): inputBuffer malloc failed\n", s);
+            goto clean;
+        }
+        memset(Params->InputBufferData, Params->FillValue, Params->InputBufferSize);
+    }
 
-//clean:
+clean:
     if ( ntPath )
         free(ntPath);
     if ( file )
@@ -695,7 +737,8 @@ BOOL checkArgs(CmdParams* Params)
         s = -1;
     }
     
-    if ( Params->Flags.PrintMode == 0 || Params->Flags.PrintMode > PRINT_MODE_MAX )
+    if ( Params->Flags.PrintMode == 0 
+        || Params->Flags.PrintMode > PRINT_MODE_MAX )
         Params->Flags.PrintMode = PRINT_MODE_COLS_8;
 
     if ( s != 0 )
@@ -733,7 +776,7 @@ void printVersion()
 }
 void printUsage()
 {
-    printf("Usage: %s /n <DeviceName> [/c <ioctl>] [/is <size>] [/os <size>] [/i(x|b|w|d|q|a|u|f) <data>] [/s <sleep>] [/da <flags>] [/sa <flags>] [/t] [/v] [/h]\n",
+    printf("Usage: %s /n <DeviceName> [/c <ioctl>] [/os <size>] [/is|/ir <size> | /i(x|b|w|d|q|a|u) <data> | /if <file>] [/s <sleep>] [/da <flags>] [/sa <flags>] [/t] [/v] [/h]\n",
         BIN_NAME);
 }
 
@@ -746,17 +789,18 @@ void printHelp()
     printf("Options:\n");
     printf(" - /n DeviceName to call. I.e. \"\\Device\\Beep\"\n");
     printf(" - /c The desired IOCTL.\n");
-    printf(" - /is Size of InputBuffer, if not filled with the data options. Will be filled with 'A's\n");
     printf(" - /os Size of OutputBuffer.\n");
     printf(" - Input Data:\n");
-    printf("    * /ix Data as hex byte string.\n");
-    printf("    * /ib Data as byte.\n");
-    printf("    * /ib Data as word (uint16).\n");
-    printf("    * /id Data as dword (uint32).\n");
-    printf("    * /iq Data as qword (uint64).\n");
-    printf("    * /ia Data as ascii text.\n");
-    printf("    * /iu Data as unicode (utf-16) text.\n");
-    printf("    * /if Data from binary file.\n");
+    printf("    * /ix <Data> as hex byte string.\n");
+    printf("    * /ib <Data> as byte.\n");
+    printf("    * /iw <Data> as word (uint16).\n");
+    printf("    * /id <Data> as dword (uint32).\n");
+    printf("    * /iq <Data> as qword (uint64).\n");
+    printf("    * /ia <Data> as ascii text.\n");
+    printf("    * /iu <Data> as unicode (utf-16) text.\n");
+    printf("    * /if Input data is read from the binary file from <path>.\n");
+    printf("    * /ir Input data will be filled with <size> random bytes.\n");
+    printf("    * /is Input data will be filled with <size> 'A's\n");
     printf(" - /s Duration of a possible sleep after device io\n");
     printf(" - /t Just test the device for accessibility. Don't send data.\n");
     printf(" - /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x%x.\n", (FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE));

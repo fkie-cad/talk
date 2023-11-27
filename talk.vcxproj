@@ -73,12 +73,12 @@
   <ItemDefinitionGroup>
     <Link>
       <AdditionalOptions>/GUARD:cf %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>%(AdditionalDependencies);ntdll.lib;</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies);ntdll.lib;Bcrypt.lib;</AdditionalDependencies>
     </Link>
     <ClCompile>
       <EnablePREfast>true</EnablePREfast>
       <ConformanceMode>true</ConformanceMode>
-      <TreatWarningAsError>true</TreatWarningAsError>
+      <TreatWarningAsError>false</TreatWarningAsError>
       <WarningLevel>Level4</WarningLevel>
       <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);</AdditionalIncludeDirectories>
       <ExceptionHandling></ExceptionHandling>

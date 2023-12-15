@@ -34,7 +34,7 @@ $devcmd> msbuild [talk.vcxproj] [/p:Platform=x86|x64] [/p:Configuration=Debug|Re
 
 ## Usage
 ```bash
-$ Talk.exe /n DeviceName [/c <ioctl>] [/os <size>] [/is|/ir <size> | /i(x|b|w|d|q|a|u) <data> | /if <file>] [/s sleep] [/da <flags>] [/sa <flags>] [/t] [/v] [/h]
+$ Talk.exe /n DeviceName [/c <ioctl>] [/os <size>] [/i(x|b|w|d|q|a|u) <data> | /if <file> | /is|/ir <size>] [/s sleep] [/da <flags>] [/sa <flags>] [/t] [/v] [/h]
 ```
 
 **Options**
@@ -50,10 +50,9 @@ $ Talk.exe /n DeviceName [/c <ioctl>] [/os <size>] [/is|/ir <size> | /i(x|b|w|d|
 - /iq Input data as qword (uint64).
 - /ia Input data as ascii text.
 - /iu Input data as unicode (utf-16) text.
-- /if Input data from binary file.
-- /if Input data is read from the binary file from <path>.
-- /ir Input data will be filled with <size> random bytes.
-- /is Input data will be filled with <size> 'A's.
+- /if Input data is read from the binary file from \<path\>.
+- /ir Input data will be filled with \<size\> random bytes.
+- /is Input data will be filled with \<size\> 'A's.
 
  **Other**
 - /s Duration of a possible sleep after device io.
@@ -84,7 +83,6 @@ $ Talk.exe /n \Device\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e
 
 ## Copyright, Credits & Contact
 Published under [GNU GENERAL PUBLIC LICENSE](LICENSE).
-
 
 ### Authors
 - Viviane Zwanger ([viviane.zwanger@fkie.fraunhofer.de](mailto:viviane.zwanger@fkie.fraunhofer.de))

@@ -4,8 +4,8 @@ Talks to a device using NtDeviceIoControl.
 
 
 ## Version
-2.1.2  
-Last changed: 27.11.2023
+2.1.3  
+Last changed: 19.01.2024
 
 ## Contents
 * [Requirements](#requirements)
@@ -34,7 +34,17 @@ $devcmd> msbuild [talk.vcxproj] [/p:Platform=x86|x64] [/p:Configuration=Debug|Re
 
 ## Usage
 ```bash
-$ Talk.exe /n DeviceName [/c <ioctl>] [/os <size>] [/i(x|b|w|d|q|a|u) <data> | /if <file> | /is|/ir <size>] [/s sleep] [/da <flags>] [/sa <flags>] [/t] [/v] [/h]
+$ Talk.exe /n DeviceName 
+           [/c <ioctl>] 
+           [/os <size>] 
+           [/i(x|b|w|d|q|a|u) <data> | /if <file> | /is|/ir <size>] 
+           [/s sleep] 
+           [/da <flags>] 
+           [/sa <flags>] 
+           [/t] 
+           [/pb|pc8|pc16|pc32|pc64|pcy]
+           [/v] 
+           [/h]
 ```
 
 **Options**
@@ -66,6 +76,7 @@ $ Talk.exe /n DeviceName [/c <ioctl>] [/os <size>] [/i(x|b|w|d|q|a|u) <data> | /
 - /pc16 Print in cols of Address | words | utf-16 chars
 - /pc32 Print in cols of Address | dwords
 - /pc64 Print in cols of Address | qwords
+- /pcy Print in cols of Address | bits
 
 **Misc**
 - /v More verbose output.

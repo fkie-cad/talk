@@ -14,17 +14,18 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.1.2"
-#define LAST_CHANGED "27.11.2023"
+#define VERSION "2.1.3"
+#define LAST_CHANGED "19.01.2024"
 
 
-#define PRINT_MODE_BYTES    (0x01) // 001
-#define PRINT_MODE_COLS_8   (0x02) // 010
-#define PRINT_MODE_COLS_16  (0x03) // 011
-#define PRINT_MODE_COLS_32  (0x04) // 100
-#define PRINT_MODE_COLS_64  (0x05) // 101
+#define PRINT_MODE_BYTES        (0x01) // 001
+#define PRINT_MODE_COLS_8       (0x02) // 010
+#define PRINT_MODE_COLS_16      (0x03) // 011
+#define PRINT_MODE_COLS_32      (0x04) // 100
+#define PRINT_MODE_COLS_64      (0x05) // 101
+#define PRINT_MODE_COLS_BITS    (0x06) // 110
 
-#define PRINT_MODE_MAX  PRINT_MODE_COLS_64 
+#define PRINT_MODE_MAX  PRINT_MODE_COLS_BITS 
 
 #define DEFAULT_FILL_VALUE ('A')
 
@@ -254,6 +255,9 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
                 break;
             case PRINT_MODE_COLS_64:
                 PrintMemCols64(outputBuffer, bytesReturned, 0);
+                break;
+            case PRINT_MODE_COLS_BITS:
+                PrintMemColsBits(outputBuffer, bytesReturned, 0);
                 break;
             default:
                 PrintMemCols8(outputBuffer, bytesReturned, 0);
@@ -638,6 +642,10 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
         {
             Params->Flags.PrintMode = PRINT_MODE_COLS_64;
         }
+        else if ( IS_3C_ARG(arg, 'pcy') )
+        {
+            Params->Flags.PrintMode = PRINT_MODE_COLS_BITS;
+        }
         else if ( IS_1C_ARG(arg, 'v') )
         {
             Params->Flags.Verbose = 1;
@@ -776,7 +784,19 @@ void printVersion()
 }
 void printUsage()
 {
-    printf("Usage: %s /n <DeviceName> [/c <ioctl>] [/os <size>] [/is|/ir <size> | /i(x|b|w|d|q|a|u) <data> | /if <file>] [/s <sleep>] [/da <flags>] [/sa <flags>] [/t] [/v] [/h]\n",
+    printf("Usage: %s "
+           "/n <DeviceName> "
+           "[/c <ioctl>] "
+           "[/os <size>] "
+           "[/is|/ir <size> | /i(x|b|w|d|q|a|u) <data> | /if <file>] "
+           "[/s <sleep>] "
+           "[/da <flags>] "
+           "[/sa <flags>] "
+           "[/t] "
+           "[/v] "
+           "[/pb|pc8|pc16|pc32|pc64|pcy] "
+           "[/h]"
+           "\n",
         BIN_NAME);
 }
 
@@ -811,6 +831,7 @@ void printHelp()
     printf("    * /pc16 Print in cols of Address | words | utf-16 chars.\n");
     printf("    * /pc32 Print in cols of Address | dwords.\n");
     printf("    * /pc64 Print in cols of Address | qwords.\n");
+    printf("    * /pcy Print in cols of Address | bits.\n");
     printf(" - /v More verbose output.\n");
     printf("\n");
     printf("Example:\n");

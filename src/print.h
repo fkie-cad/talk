@@ -22,7 +22,7 @@
     for ( UINT64 _i_ = 0; _i_ < _s_; _i_+=0x10 ) \
     { \
         UINT64 _end_ = (_i_+0x10<_s_) ? (_i_+0x10) : (_s_); \
-        ULONG _gap_ = (_i_+0x10<=_s_) ? 0 : ((0x10+_i_-_s_)*3); \
+        ULONG _gap_ = (_i_+0x10<=_s_) ? 0 : (ULONG)((0x10+_i_-_s_)*3); \
         printf("%.*zx  ", _hw_w_, (((UINT64)_a_)+_i_)); \
          \
         for ( UINT64 _j_ = _i_, _k_=0; _j_ < _end_; _j_++, _k_++ ) \
@@ -56,10 +56,12 @@
     UINT8 _hw_w_ = 0x10; \
     HEX_CHAR_WIDTH(_hw_v_, _hw_w_); \
     \
+    if ( _s_ % 2 != 0 ) _s_ = _s_ - 1; \
+    \
     for ( UINT64 _i_ = 0; _i_ < _s_; _i_+=0x10 ) \
     { \
         UINT64 _end_ = (_i_+0x10<_s_)?(_i_+0x10):(_s_); \
-        ULONG _gap_ = (_i_+0x10<=_s_) ? 0 : ((0x10+_i_-_s_)/2*5); \
+        ULONG _gap_ = (_i_+0x10<=_s_) ? 0 : (ULONG)((0x10+_i_-_s_)/2*5); \
         printf("%.*zx  ", _hw_w_, (((UINT64)_a_)+_i_)); \
          \
         for ( UINT64 _j_ = _i_; _j_ < _end_; _j_+=2 ) \
@@ -85,6 +87,8 @@
     UINT8 _hw_w_ = 0x10; \
     HEX_CHAR_WIDTH(_hw_v_, _hw_w_); \
     \
+    if ( _s_ % 4 != 0 ) _s_ = _s_ - (_s_ % 4); \
+    \
     for ( UINT64 _i_ = 0; _i_ < _s_; _i_+=0x10 ) \
     { \
         UINT64 _end_ = (_i_+0x10<_s_)?(_i_+0x10):(_s_); \
@@ -104,6 +108,8 @@
     UINT8 _hw_w_ = 0x10; \
     HEX_CHAR_WIDTH(_hw_v_, _hw_w_); \
     \
+    if ( _s_ % 8 != 0 ) _s_ = _s_ - (_s_ % 8); \
+    \
     for ( UINT64 _i_ = 0; _i_ < _s_; _i_+=0x10 ) \
     { \
         UINT64 _end_ = (_i_+0x10<_s_)?(_i_+0x10):(_s_); \
@@ -112,6 +118,41 @@
         for ( UINT64 _j_ = _i_; _j_ < _end_; _j_+=8 ) \
         { \
             printf("%016llx ", *(PUINT64)&(((PUINT8)_b_)[_j_])); \
+        } \
+        printf("\n"); \
+    } \
+}
+
+#define PrintMemColsBits(_b_, _s_, _o_) \
+{ \
+    UINT64 _hw_v_ = (SIZE_T)_o_ + (SIZE_T)_s_; \
+    UINT8 _hw_w_ = 0x10; \
+    UINT8 _bytes_per_col = 8; \
+    HEX_CHAR_WIDTH(_hw_v_, _hw_w_); \
+    \
+    for ( SIZE_T _i_ = 0; _i_ < (SIZE_T)_s_; _i_+=_bytes_per_col ) \
+    { \
+        SIZE_T _end_ = (_i_+_bytes_per_col<(SIZE_T)_s_)?(_i_+_bytes_per_col):((SIZE_T)_s_); \
+        printf("%.*zx  ", _hw_w_, (((SIZE_T)_o_)+_i_)); \
+         \
+        for ( SIZE_T _bi_ = _i_; _bi_ < _end_; _bi_++ ) \
+        { \
+            UINT8 _n_ = ((PUINT8)_b_)[_bi_]; \
+            for ( INT _j_ = 7; _j_ >= 0; _j_-- ) \
+            { \
+                if ( ( (_n_ >> _j_) & 1 ) ) \
+                    putchar('1'); \
+                else \
+                    putchar('0'); \
+                if ( _bi_ % 4 == 3 && _j_ == 0 && _bi_ < _end_-1) \
+                { \
+                    putchar('-'); \
+                } \
+                else if ( _j_ % 4 == 0 ) \
+                { \
+                    putchar(' '); \
+                } \
+            } \
         } \
         printf("\n"); \
     } \

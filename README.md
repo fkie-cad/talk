@@ -4,8 +4,8 @@ Talks to a device using NtDeviceIoControl.
 
 
 ## Version
-2.1.3  
-Last changed: 19.01.2024
+2.1.4  
+Last changed: 26.02.2024
 
 ## Contents
 * [Requirements](#requirements)
@@ -42,7 +42,7 @@ $ Talk.exe /n DeviceName
            [/da <flags>] 
            [/sa <flags>] 
            [/t] 
-           [/pb|pc8|pc16|pc32|pc64|pcy]
+           [/pb|pbs|pc8|pc16|pc32|pc64|pc1|pa|pu]
            [/v] 
            [/h]
 ```
@@ -71,12 +71,15 @@ $ Talk.exe /n DeviceName
 - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE =  0x3
 
  **Printing style for output buffer**
-- /pb Print in plain bytes
+- /pb Print plain space separated bytes
+- /pbs Print plain byte string
 - /pc8 Print in cols of Address | bytes | ascii chars
 - /pc16 Print in cols of Address | words | utf-16 chars
 - /pc32 Print in cols of Address | dwords
 - /pc64 Print in cols of Address | qwords
-- /pcy Print in cols of Address | bits
+- /pc1 Print in cols of Address | bits
+- /pa Print as ascii string
+- /pu Print as unicode (utf-16) string
 
 **Misc**
 - /v More verbose output.
@@ -89,6 +92,12 @@ A sleep (`/s`) may be useful with asynchronous calls like Beep.
 Call beep
 ```bash
 $ Talk.exe /n \Device\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e
+```
+
+Query Name and GUID of HarddiskVolume1
+```bash
+$ Talk.exe /n \Device\HarddiskVolume1 /c 0x4d0008 /os 0x100 /pu
+$ Talk.exe /n \Device\HarddiskVolume1 /c 0x4d0018 /os 0x10 /pb
 ```
 
 

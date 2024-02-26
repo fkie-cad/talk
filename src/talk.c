@@ -14,20 +14,26 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.1.3"
-#define LAST_CHANGED "19.01.2024"
+#define VERSION "2.1.4"
+#define LAST_CHANGED "26.02.2024"
 
 
-#define PRINT_MODE_BYTES        (0x01) // 001
-#define PRINT_MODE_COLS_8       (0x02) // 010
-#define PRINT_MODE_COLS_16      (0x03) // 011
-#define PRINT_MODE_COLS_32      (0x04) // 100
-#define PRINT_MODE_COLS_64      (0x05) // 101
-#define PRINT_MODE_COLS_BITS    (0x06) // 110
+#define PRINT_MODE_NONE         (0x00) // 0000
+#define PRINT_MODE_BYTES        (0x01) // 0001
+#define PRINT_MODE_BYTE_STR     (0x02) // 0010
+#define PRINT_MODE_COLS_8       (0x03) // 0011
+#define PRINT_MODE_COLS_16      (0x04) // 0100
+#define PRINT_MODE_COLS_32      (0x05) // 0101
+#define PRINT_MODE_COLS_64      (0x06) // 0101
+#define PRINT_MODE_COLS_BITS    (0x07) // 0111
+#define PRINT_MODE_ASCII        (0x08) // 1000
+#define PRINT_MODE_UNICODE      (0x09) // 1001
 
-#define PRINT_MODE_MAX  PRINT_MODE_COLS_BITS 
+#define PRINT_MODE_MAX  PRINT_MODE_UNICODE 
 
 #define DEFAULT_FILL_VALUE ('A')
+
+#define MAX_PATTERN_SIZE (26*26*10*3)
 
 
 typedef struct CmdParams {
@@ -41,8 +47,8 @@ typedef struct CmdParams {
     ULONG ShareAccess;
     struct {
         ULONG Verbose:1;
-        ULONG PrintMode:3;
-        ULONG Reserved:28;
+        ULONG PrintMode:4;
+        ULONG Reserved:27;
     } Flags;
     BOOL TestHandle;
     CHAR FillValue;
@@ -50,9 +56,11 @@ typedef struct CmdParams {
 
 
 
-BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params);
-BOOL checkArgs(CmdParams* Params);
-void printArgs(PCmdParams Params);
+INT genPattern(_Inout_ PVOID Buffer, _In_ ULONG Size);
+
+BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params);
+BOOL checkArgs(_In_ CmdParams* Params);
+void printArgs(_In_ PCmdParams Params);
 
 void printUsage();
 void printHelp();
@@ -247,6 +255,9 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
             case PRINT_MODE_BYTES:
                 PrintMemBytes(outputBuffer, bytesReturned);
                 break;
+            case PRINT_MODE_BYTE_STR:
+                PrintMemByteStr(outputBuffer, bytesReturned);
+                break;
             case PRINT_MODE_COLS_16:
                 PrintMemCols16(outputBuffer, bytesReturned, 0);
                 break;
@@ -258,6 +269,12 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
                 break;
             case PRINT_MODE_COLS_BITS:
                 PrintMemColsBits(outputBuffer, bytesReturned, 0);
+                break;
+            case PRINT_MODE_ASCII:
+                printf("%.*s\n", bytesReturned, outputBuffer);
+                break;
+            case PRINT_MODE_UNICODE:
+                printf("%.*ws\n", bytesReturned/2, (PWCHAR)outputBuffer);
                 break;
             default:
                 PrintMemCols8(outputBuffer, bytesReturned, 0);
@@ -323,7 +340,7 @@ clean:
     } \
 }
 
-BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
+BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
 {
     INT start_i = 1;
     INT last_i = argc;
@@ -570,10 +587,40 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
                 break;
             }
 
-            genRand(Params->InputBufferData, Params->InputBufferSize);
+            s = genRand(Params->InputBufferData, Params->InputBufferSize);
             if ( s != 0 )
             {
                 printf("ERROR: Generating random failed!\n");
+                break;
+            }
+
+            i++;
+        }
+        else if ( IS_2C_ARG(arg, 'ip') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No pattern length set!\n");
+
+            if ( Params->InputBufferData )
+            {
+                printf("INFO: InputData size already set! Skipping!\n");
+                i++;
+                continue;
+            }
+
+            STR_TO_ULONG(Params->InputBufferSize, val1, s);
+            Params->InputBufferData = malloc(Params->InputBufferSize);
+            if ( !Params->InputBufferData )
+            {
+                s = ERROR_NOT_ENOUGH_MEMORY;
+                printf("ERROR: No memory for input data!\n");
+                Params->InputBufferSize = 0;
+                break;
+            }
+
+            s = genPattern(Params->InputBufferData, Params->InputBufferSize);
+            if ( s != 0 )
+            {
+                printf("ERROR: Generating pattern failed!\n");
                 break;
             }
 
@@ -626,6 +673,10 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
         {
             Params->Flags.PrintMode = PRINT_MODE_BYTES;
         }
+        else if ( IS_3C_ARG(arg, 'pbs') )
+        {
+            Params->Flags.PrintMode = PRINT_MODE_BYTE_STR;
+        }
         else if ( IS_3C_ARG(arg, 'pc8') )
         {
             Params->Flags.PrintMode = PRINT_MODE_COLS_8;
@@ -642,9 +693,17 @@ BOOL parseArgs(INT argc, CHAR** argv, CmdParams* Params)
         {
             Params->Flags.PrintMode = PRINT_MODE_COLS_64;
         }
-        else if ( IS_3C_ARG(arg, 'pcy') )
+        else if ( IS_3C_ARG(arg, 'pc1') )
         {
             Params->Flags.PrintMode = PRINT_MODE_COLS_BITS;
+        }
+        else if ( IS_2C_ARG(arg, 'pa') )
+        {
+            Params->Flags.PrintMode = PRINT_MODE_ASCII;
+        }
+        else if ( IS_2C_ARG(arg, 'pu') )
+        {
+            Params->Flags.PrintMode = PRINT_MODE_UNICODE;
         }
         else if ( IS_1C_ARG(arg, 'v') )
         {
@@ -736,7 +795,51 @@ int openFile(
     return 0;
 }
 
-BOOL checkArgs(CmdParams* Params)
+INT genPattern(_Inout_ PVOID Buffer, _In_ ULONG Size)
+{
+    //ULONG parts = Size / 3;
+    ULONG rest = Size % 3;
+
+    PUINT8 b = (PUINT8)Buffer;
+    ULONG j = 0;
+    UINT8 f = 0;
+    UINT8 s = 0;
+    UINT8 t = 0;
+
+    if ( !Size || Size > MAX_PATTERN_SIZE )
+        return ERROR_INVALID_PARAMETER;
+
+    for ( f = 'A'; f <= 'Z'; f++ )
+    {
+        for ( s = 'a'; s <= 'z'; s++ )
+        {
+            for ( t = '0'; t <= '9'; t++ )
+            {
+                if ( j + 3 > Size )
+                    goto endAligned;
+                
+                b[j] = f;
+                b[j+1] =  s;
+                b[j+2] = t;
+                
+                j += 3;
+            }
+        }
+    }
+endAligned:
+    if ( rest >= 1 )
+    {
+        b[j] = f;
+    }
+    if ( rest == 2 )
+    {
+        b[j+1] = s;
+    }
+
+    return 0;
+}
+
+BOOL checkArgs(_In_ CmdParams* Params)
 {
     INT s = 0;
     if ( Params->DeviceName == NULL )
@@ -745,9 +848,11 @@ BOOL checkArgs(CmdParams* Params)
         s = -1;
     }
     
-    if ( Params->Flags.PrintMode == 0 
+    if ( Params->Flags.PrintMode == PRINT_MODE_NONE
         || Params->Flags.PrintMode > PRINT_MODE_MAX )
+    {
         Params->Flags.PrintMode = PRINT_MODE_COLS_8;
+    }
 
     if ( s != 0 )
         printf("\n");
@@ -755,7 +860,7 @@ BOOL checkArgs(CmdParams* Params)
     return s == 0;
 }
 
-void printArgs(PCmdParams Params)
+void printArgs(_In_ PCmdParams Params)
 {
     printf("Params:\n");
     printf(" - DeviceName: %s\n", Params->DeviceName);
@@ -788,13 +893,13 @@ void printUsage()
            "/n <DeviceName> "
            "[/c <ioctl>] "
            "[/os <size>] "
-           "[/is|/ir <size> | /i(x|b|w|d|q|a|u) <data> | /if <file>] "
+           "[/is|/ir|/ip <size> | /i(x|b|w|d|q|a|u) <data> | /if <file>] "
            "[/s <sleep>] "
            "[/da <flags>] "
            "[/sa <flags>] "
            "[/t] "
            "[/v] "
-           "[/pb|pc8|pc16|pc32|pc64|pcy] "
+           "[/pb|pbs|pc8|pc16|pc32|pc64|pc1|pa|pu] "
            "[/h]"
            "\n",
         BIN_NAME);
@@ -818,22 +923,27 @@ void printHelp()
     printf("    * /iq <Data> as qword (uint64).\n");
     printf("    * /ia <Data> as ascii text.\n");
     printf("    * /iu <Data> as unicode (utf-16) text.\n");
-    printf("    * /if Input data is read from the binary file from <path>.\n");
+    printf("    * /if Input data is read as binary data from the file <path>.\n");
     printf("    * /ir Input data will be filled with <size> random bytes.\n");
+    printf("    * /ip Input data will be filled with <size> pattern bytes (Aa0Aa1...).\n");
     printf("    * /is Input data will be filled with <size> 'A's.\n");
     printf(" - /s Duration of a possible sleep after device io\n");
     printf(" - /t Just test the device for accessibility. Don't send data.\n");
     printf(" - /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x%x.\n", (FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE));
     printf(" - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x%x.\n", (FILE_SHARE_READ|FILE_SHARE_WRITE));
     printf(" - Printing style for output buffer:\n");
-    printf("    * /pb Print in plain bytes.\n");
+    printf("    * /pb Print in plain space separated bytes.\n");
+    printf("    * /pbs Print in plain byte string.\n");
     printf("    * /pc8 Print in cols of Address | bytes | ascii chars.\n");
     printf("    * /pc16 Print in cols of Address | words | utf-16 chars.\n");
     printf("    * /pc32 Print in cols of Address | dwords.\n");
     printf("    * /pc64 Print in cols of Address | qwords.\n");
-    printf("    * /pcy Print in cols of Address | bits.\n");
+    printf("    * /pc1 Print in cols of Address | bits.\n");
+    printf("    * /pa Print as ascii string.\n");
+    printf("    * /pu Print as unicode (utf-16) string.\n");
     printf(" - /v More verbose output.\n");
     printf("\n");
     printf("Example:\n");
     printf("$ Talk.exe /n \\Device\\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e\n");
+    printf("$ Talk.exe /n \\Device\\HarddiskVolume1 /c 0x4d0008 /os 0x100 /pu\n");
 }

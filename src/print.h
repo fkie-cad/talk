@@ -167,6 +167,15 @@
     printf("\n"); \
 }
 
+#define PrintMemByteStr(_b_, _s_) \
+{ \
+    for ( UINT64 _i_ = 0; _i_ < _s_; _i_++ ) \
+    { \
+        printf("%02x", ((PUINT8)_b_)[_i_]); \
+    } \
+    printf("\n"); \
+}
+
 #define STATUS_CASE(__status__) \
     case __status__: return #__status__;
 #define STATUS_CASE_DESC(__status__, __desc__) \

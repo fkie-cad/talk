@@ -4,8 +4,8 @@ Talks to a device using NtDeviceIoControl.
 
 
 ## Version
-2.1.4  
-Last changed: 26.02.2024
+2.1.6  
+Last changed: 28.02.2024
 
 ## Contents
 * [Requirements](#requirements)
@@ -36,8 +36,10 @@ $devcmd> msbuild [talk.vcxproj] [/p:Platform=x86|x64] [/p:Configuration=Debug|Re
 ```bash
 $ Talk.exe /n DeviceName 
            [/c <ioctl>] 
-           [/os <size>] 
-           [/i(x|b|w|d|q|a|u) <data> | /if <file> | /is|/ir <size>] 
+           [/os <size>]
+           [/is|/ir|/ip <size>]
+           [/ipc <start> <size>]
+           [/i(x|b|w|d|q|a|u) <data>]
            [/s sleep] 
            [/da <flags>] 
            [/sa <flags>] 
@@ -49,7 +51,7 @@ $ Talk.exe /n DeviceName
 
 **Options**
 - /n DeviceName to call. I.e. "\Device\Beep"
-- /c The desired IOCTL.
+- /c The desired IOCTL in hex.
 - /os Size of OutputBuffer.
 
 **Input Data**
@@ -62,6 +64,8 @@ $ Talk.exe /n DeviceName
 - /iu Input data as unicode (utf-16) text.
 - /if Input data is read from the binary file from \<path\>.
 - /ir Input data will be filled with \<size\> random bytes.
+- /ip Input data will be filled with \<size\> pattern bytes (Aa0Aa1...).\n");
+- /ipc Input data will be filled with \<size\> custom pattern bytes, starting from \<start\>.\n");
 - /is Input data will be filled with \<size\> 'A's.
 
  **Other**
@@ -86,6 +90,7 @@ $ Talk.exe /n DeviceName
 
 **Remarks**  
 A sleep (`/s`) may be useful with asynchronous calls like Beep.  
+Custom patterns (`/ipc`) are auto aligned to 1, 2, 4 or 8 bytes.  
 
 
 ### Example

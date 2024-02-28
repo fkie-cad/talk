@@ -131,6 +131,18 @@
     </Link>
   </ItemDefinitionGroup>
 
+  <ItemDefinitionGroup Condition="'$(DebugPrint)'!='0' And '$(DebugPrint)'!=''">
+    <ClCompile>
+      <PreprocessorDefinitions>DEBUG_PRINT=$(DebugPrint);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(ErrorPrint)'=='1'">
+    <ClCompile>
+      <PreprocessorDefinitions>ERROR_PRINT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
   <ItemGroup>
     <ClCompile Include="src\talk.c" />
   </ItemGroup>
@@ -141,10 +153,10 @@
     <Message Text="PlatformToolset = $(PlatformToolset)" />
     <Message Text="Project Name = $(MSBuildProjectName)" />
     <Message Text="Project File Name = $(MSBuildProjectFile)" />
-	<Message Text="ConfigurationType = $(ConfigurationType)" />
-	<Message Text="Configuration = $(Configuration)" />
-	<Message Text="Platform = $(Platform)" />
-	<Message Text="RunTimeLib = $(RunTimeLib)" />
+    <Message Text="ConfigurationType = $(ConfigurationType)" />
+    <Message Text="Configuration = $(Configuration)" />
+    <Message Text="Platform = $(Platform)" />
+    <Message Text="RunTimeLib = $(RunTimeLib)" />
     <Message Text="IntDir = $(IntDir)" />
     <Message Text="OutDir = $(OutDir)" />
     <Message Text="TargetPath = $(TargetPath)" />

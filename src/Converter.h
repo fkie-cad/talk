@@ -8,6 +8,14 @@
 int parseUint8(const char* arg, UINT8* value, UINT8 base);
 int parseUint64(const char* arg, ULONGLONG* value, UINT8 base);
 
+#define uint16_t UINT16
+#define uint32_t UINT32
+#define uint64_t UINT64
+
+uint16_t swapUint16(uint16_t value);
+uint32_t swapUint32(uint32_t value);
+uint64_t swapUint64(uint64_t value);
+
 
 #define IS_NUM_CHAR(__char__) \
     ( __char__ >= '0' && __char__ <= '9' )
@@ -179,6 +187,32 @@ int parseUint64(const char* arg, ULONGLONG* value, UINT8 base)
 
     *value = result;
     return 0;
+}
+
+uint16_t swapUint16(uint16_t value)
+{
+    return (((value & 0x00FFu) << 8u) |
+    ((value & 0xFF00u) >> 8u));
+}
+
+uint32_t swapUint32(uint32_t value)
+{
+    return (((value & 0x000000FFu) << 24u) |
+    ((value & 0x0000FF00u) <<  8u) |
+    ((value & 0x00FF0000u) >>  8u) |
+    ((value & 0xFF000000u) >> 24u));
+}
+
+uint64_t swapUint64(uint64_t value)
+{
+    return (((value & 0x00000000000000FF) << 56) |
+    ((value & 0x000000000000FF00) << 40) |
+    ((value & 0x0000000000FF0000) << 24) |
+    ((value & 0x00000000FF000000) <<  8) |
+    ((value & 0x000000FF00000000) >>  8) |
+    ((value & 0x0000FF0000000000) >> 24) |
+    ((value & 0x00FF000000000000) >> 40) |
+    ((value & 0xFF00000000000000) >> 56));
 }
 
 #endif

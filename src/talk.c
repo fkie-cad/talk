@@ -14,8 +14,8 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.1.4"
-#define LAST_CHANGED "26.02.2024"
+#define VERSION "2.1.6"
+#define LAST_CHANGED "28.02.2024"
 
 
 #define PRINT_MODE_NONE         (0x00) // 0000
@@ -57,6 +57,7 @@ typedef struct CmdParams {
 
 
 INT genPattern(_Inout_ PVOID Buffer, _In_ ULONG Size);
+INT genCustomPattern(_In_ UINT64 PatternStart, _Inout_ PVOID Buffer, _In_ ULONG Size);
 
 BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params);
 BOOL checkArgs(_In_ CmdParams* Params);
@@ -303,10 +304,23 @@ clean:
     __except ( EXCEPTION_EXECUTE_HANDLER ) \
     { \
         __s__ = GetExceptionCode(); \
-        printf("[X] Exception parsing number! (0x%x)\n", __s__); \
+        printf("[X] Exception parsing input number! (0x%x)\n", __s__); \
         break; \
     } \
-} \
+}
+
+#define STR_TO_ULONG_X(__out__, __val__, __s__) \
+{ \
+    __try { \
+        __out__ = (ULONG)strtoul(__val__, NULL, 16); \
+    } \
+    __except ( EXCEPTION_EXECUTE_HANDLER ) \
+    { \
+        __s__ = GetExceptionCode(); \
+        printf("[X] Exception parsing input number! (0x%x)\n", __s__); \
+        break; \
+    } \
+}
 
 #define PARSE_ID_NUMBER(__buffer__, __bufferSize__, __size__, __status__, __type__, __value__) \
 { \
@@ -314,7 +328,7 @@ clean:
     if ( !__buffer__ ) \
     { \
         __status__ = ERROR_NOT_ENOUGH_MEMORY; \
-        printf("ERROR: No memory for input data!\n"); \
+        EPrint("No memory for input data!\n"); \
         break; \
     } \
      \
@@ -350,6 +364,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
 
     char* arg = NULL;
     char *val1 = NULL;
+    char *val2 = NULL;
     
     ULONG cb;
     ULONG cch;
@@ -389,7 +404,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         {
             BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No ioctl code set!\n");
   
-            STR_TO_ULONG(Params->IOCTL, val1, s);
+            STR_TO_ULONG_X(Params->IOCTL, val1, s);
 
             i++;
         }
@@ -460,7 +475,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             if ( !Params->InputBufferData )
             {
                 s = ERROR_NOT_ENOUGH_MEMORY;
-                printf("ERROR: No memory for input data!\n");
+                EPrint("No memory for input data!\n");
                 Params->InputBufferSize = 0;
                 break;
             }
@@ -481,7 +496,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             if ( !Params->InputBufferData )
             {
                 s = ERROR_NOT_ENOUGH_MEMORY;
-                printf("ERROR: No memory for input data!\n");
+                EPrint("No memory for input data!\n");
                 Params->InputBufferSize = 0;
                 break;
             }
@@ -501,7 +516,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             if ( cch == 0 )
             {
                 s = GetLastError();
-                printf("ERROR: Getting full path failed! (0x%x)\n", s);
+                EPrint("Getting full path failed! (0x%x)\n", s);
                 break;
             }
             cch += 4; // nt prefix
@@ -510,14 +525,14 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             if ( !ntPath )
             {
                 s = ERROR_NOT_ENOUGH_MEMORY;
-                printf("ERROR: No memory for path!\n");
+                EPrint("No memory for path!\n");
                 break;
             }
             cch = GetFullPathNameW(val1W, cch-4, &ntPath[4], NULL);
             if ( cch == 0 )
             {
                 s = GetLastError();
-                printf("ERROR: Getting full path failed! (0x%x)\n", s);
+                EPrint("Getting full path failed! (0x%x)\n", s);
                 break;
             }
             *(PUINT64)ntPath = NT_PATH_PREFIX_W;
@@ -533,13 +548,13 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             if ( !b || !fileSize.QuadPart )
             {
                 s = GetLastError();
-                printf("ERROR: Getting file size failed! (0x%x)\n", s);
+                EPrint("Getting file size failed! (0x%x)\n", s);
                 break;
             }
             if ( fileSize.QuadPart > MAXUINT32 )
             {
                 s = ERROR_INVALID_PARAMETER;
-                printf("ERROR: File too big! (0x%x)\n", s);
+                EPrint("File too big! (0x%x)\n", s);
                 break;
             }
 
@@ -547,7 +562,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             if ( !Params->InputBufferData )
             {
                 s = ERROR_NOT_ENOUGH_MEMORY;
-                printf("ERROR: No memory for input data!\n");
+                EPrint("No memory for input data!\n");
                 break;
             }
             Params->InputBufferSize = fileSize.LowPart;
@@ -558,7 +573,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             s = NtReadFile(file, NULL, NULL, NULL, &iosb, Params->InputBufferData, Params->InputBufferSize, NULL, NULL);
             if ( s != 0 ) 
             {
-                printf("ERROR: Reading input data failed! (0x%x)\n", s);
+                EPrint("Reading input data failed! (0x%x)\n", s);
                 break;
             }
             if ( NT_SUCCESS(iosb.Status) )
@@ -572,7 +587,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
 
             if ( Params->InputBufferData )
             {
-                printf("INFO: InputData size already set! Skipping!\n");
+                printf("INFO: InputData already set! Skipping!\n");
                 i++;
                 continue;
             }
@@ -582,7 +597,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             if ( !Params->InputBufferData )
             {
                 s = ERROR_NOT_ENOUGH_MEMORY;
-                printf("ERROR: No memory for input data!\n");
+                EPrint("No memory for input data!\n");
                 Params->InputBufferSize = 0;
                 break;
             }
@@ -590,7 +605,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             s = genRand(Params->InputBufferData, Params->InputBufferSize);
             if ( s != 0 )
             {
-                printf("ERROR: Generating random failed!\n");
+                EPrint("Generating random failed!\n");
                 break;
             }
 
@@ -602,7 +617,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
 
             if ( Params->InputBufferData )
             {
-                printf("INFO: InputData size already set! Skipping!\n");
+                printf("INFO: InputData already set! Skipping!\n");
                 i++;
                 continue;
             }
@@ -612,7 +627,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             if ( !Params->InputBufferData )
             {
                 s = ERROR_NOT_ENOUGH_MEMORY;
-                printf("ERROR: No memory for input data!\n");
+                EPrint("No memory for input data!\n");
                 Params->InputBufferSize = 0;
                 break;
             }
@@ -620,10 +635,45 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             s = genPattern(Params->InputBufferData, Params->InputBufferSize);
             if ( s != 0 )
             {
-                printf("ERROR: Generating pattern failed!\n");
+                EPrint("Generating pattern failed!\n");
                 break;
             }
 
+            i++;
+        }
+        else if ( IS_3C_ARG(arg, 'ipc') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No pattern start value set!\n");
+            
+            val2 = GET_ARG_VALUE(argc, argv, i, 2);
+            BREAK_ON_NOT_A_VALUE(val2, s, "ERROR: No pattern length set!\n");
+
+            if ( Params->InputBufferData )
+            {
+                printf("INFO: InputData already set! Skipping!\n");
+                i++;
+                continue;
+            }
+
+            UINT64 patternStart = strtoull(val1, NULL, 0);
+            STR_TO_ULONG(Params->InputBufferSize, val2, s);
+            Params->InputBufferData = malloc(Params->InputBufferSize);
+            if ( !Params->InputBufferData )
+            {
+                s = ERROR_NOT_ENOUGH_MEMORY;
+                EPrint("No memory for input data!\n");
+                Params->InputBufferSize = 0;
+                break;
+            }
+
+            s = genCustomPattern(patternStart, Params->InputBufferData, Params->InputBufferSize);
+            if ( s != 0 )
+            {
+                EPrint("Generating pattern failed!\n");
+                break;
+            }
+
+            i++;
             i++;
         }
         else if ( IS_2C_ARG(arg, 'is') )
@@ -632,7 +682,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
 
             if ( Params->InputBufferData )
             {
-                printf("INFO: InputData size already set! Skipping!\n");
+                printf("INFO: InputData already set! Skipping!\n");
                 i++;
                 continue;
             }
@@ -788,7 +838,7 @@ int openFile(
             );
     if ( !NT_SUCCESS(status) )
     {
-        printf("ERROR: Open file failed! (0x%x) [%s].\n", status, getStatusString(status));
+        EPrint("Open file failed! (0x%x) [%s].\n", status, getStatusString(status));
         return status;
     }
 
@@ -839,12 +889,54 @@ endAligned:
     return 0;
 }
 
+INT genCustomPattern(_In_ UINT64 PatternStart, _Inout_ PVOID Buffer, _In_ ULONG Size)
+{
+    INT s = 0;
+    UINT64 i = 0;
+    UINT64 v = 0;
+    UINT8 hw = 0x10;
+    HEX_CHAR_WIDTH(PatternStart, hw);
+    hw /= 2;
+    hw = ( hw==3) ? 4 : (hw>4&&hw<9) ? 8 : hw;
+    UINT64 end = Size/hw;
+
+    DPrint("PatternStart: 0x%llx\n", PatternStart);
+    DPrint("hw: 0x%x\n", hw);
+    DPrint("end: 0x%llx\n", end);
+
+    for ( i = 0, v = PatternStart; i < end; i++, v++ )
+    {
+        DPrint("[%llu] v: 0x%llx\n", i, v);
+        switch ( hw )
+        {
+            case 1:
+                ((UINT8*)Buffer)[i] = (UINT8)v;
+                break;
+            case 2:
+                ((UINT16*)Buffer)[i] = swapUint16((UINT16)v);
+                break;
+            case 4:
+                ((UINT32*)Buffer)[i] = swapUint32((UINT32)v);
+                break;
+            case 8:
+                ((UINT64*)Buffer)[i] = swapUint64((UINT64)v);
+                break;
+            default:
+                EPrint("Not aligned!\n");
+                s = ERROR_INVALID_PARAMETER;
+                break;
+        }
+    }
+
+    return s;
+}
+
 BOOL checkArgs(_In_ CmdParams* Params)
 {
     INT s = 0;
     if ( Params->DeviceName == NULL )
     {
-        printf("ERROR: No device name given!\n");
+        EPrint("No device name given!\n");
         s = -1;
     }
     
@@ -893,7 +985,10 @@ void printUsage()
            "/n <DeviceName> "
            "[/c <ioctl>] "
            "[/os <size>] "
-           "[/is|/ir|/ip <size> | /i(x|b|w|d|q|a|u) <data> | /if <file>] "
+           "[/is|/ir|/ip <size>] "
+           "[/ipc <start> <size>] "
+           "[/i(x|b|w|d|q|a|u) <data>] "
+           "[/if <file>] "
            "[/s <sleep>] "
            "[/da <flags>] "
            "[/sa <flags>] "
@@ -913,7 +1008,7 @@ void printHelp()
     printf("\n");
     printf("Options:\n");
     printf(" - /n DeviceName to call. I.e. \"\\Device\\Beep\"\n");
-    printf(" - /c The desired IOCTL.\n");
+    printf(" - /c The desired IOCTL in hex.\n");
     printf(" - /os Size of OutputBuffer.\n");
     printf(" - Input Data:\n");
     printf("    * /ix <Data> as hex byte string.\n");
@@ -926,6 +1021,7 @@ void printHelp()
     printf("    * /if Input data is read as binary data from the file <path>.\n");
     printf("    * /ir Input data will be filled with <size> random bytes.\n");
     printf("    * /ip Input data will be filled with <size> pattern bytes (Aa0Aa1...).\n");
+    printf("    * /ipc Input data will be filled with <size> custom pattern bytes, starting from <start>.\n");
     printf("    * /is Input data will be filled with <size> 'A's.\n");
     printf(" - /s Duration of a possible sleep after device io\n");
     printf(" - /t Just test the device for accessibility. Don't send data.\n");

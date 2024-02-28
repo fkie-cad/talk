@@ -1,5 +1,25 @@
 #pragma once
 
+#ifdef DEBUG_PRINT
+#define DPrint(...) \
+                printf(__VA_ARGS__);
+#define FEnter() \
+                printf("[>] %s()\n", __FUNCTION__);
+#else
+#define DPrint(...)
+#define FEnter()
+#endif
+
+#ifdef ERROR_PRINT
+#define EPrint(...) \
+{ \
+                printf("[e] ");\
+                printf(__VA_ARGS__); \
+}
+#else
+#define EPrint(...)
+#endif
+
 #define HEX_CHAR_WIDTH(__hcw_v__, __hcw_w__) \
 { \
     UINT8 _hcw_w_ = 0x10; \

@@ -14,8 +14,8 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.1.6"
-#define LAST_CHANGED "28.02.2024"
+#define VERSION "2.1.7"
+#define LAST_CHANGED "29.02.2024"
 
 
 #define PRINT_MODE_NONE         (0x00) // 0000
@@ -33,7 +33,7 @@
 
 #define DEFAULT_FILL_VALUE ('A')
 
-#define MAX_PATTERN_SIZE (26*26*10*3)
+#define MAX_DEF_PATTERN_SIZE (26*26*10*3)
 
 
 typedef struct CmdParams {
@@ -57,7 +57,7 @@ typedef struct CmdParams {
 
 
 INT genPattern(_Inout_ PVOID Buffer, _In_ ULONG Size);
-INT genCustomPattern(_In_ UINT64 PatternStart, _Inout_ PVOID Buffer, _In_ ULONG Size);
+INT genCustomPattern(_In_ UINT64 PatternStart, _In_ ULONG PatternSize, _Inout_ PVOID Buffer, _In_ ULONG BufferSize);
 
 BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params);
 BOOL checkArgs(_In_ CmdParams* Params);
@@ -373,7 +373,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
     HANDLE file = NULL;
     
     ZeroMemory(Params, sizeof(CmdParams));
-    Params->DesiredAccess = FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE;
+    Params->DesiredAccess = FILE_GENERIC_READ|FILE_GENERIC_WRITE;
     Params->ShareAccess = FILE_SHARE_READ|FILE_SHARE_WRITE;
     Params->FillValue = DEFAULT_FILL_VALUE;
 
@@ -585,12 +585,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         {
             BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No random length set!\n");
 
-            if ( Params->InputBufferData )
-            {
-                printf("INFO: InputData already set! Skipping!\n");
-                i++;
-                continue;
-            }
+            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
             STR_TO_ULONG(Params->InputBufferSize, val1, s);
             Params->InputBufferData = malloc(Params->InputBufferSize);
@@ -615,12 +610,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         {
             BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No pattern length set!\n");
 
-            if ( Params->InputBufferData )
-            {
-                printf("INFO: InputData already set! Skipping!\n");
-                i++;
-                continue;
-            }
+            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
             STR_TO_ULONG(Params->InputBufferSize, val1, s);
             Params->InputBufferData = malloc(Params->InputBufferSize);
@@ -647,15 +637,18 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             
             val2 = GET_ARG_VALUE(argc, argv, i, 2);
             BREAK_ON_NOT_A_VALUE(val2, s, "ERROR: No pattern length set!\n");
+            
+            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
-            if ( Params->InputBufferData )
+            UINT64 patternStart = 0;
+            PUINT8 patternStartPtr = (PUINT8)&patternStart;
+            ULONG patternSize = 0;
+            s = parsePlainBytes(val1, &patternStartPtr, &patternSize, 8);
+            if ( s != 0 )
             {
-                printf("INFO: InputData already set! Skipping!\n");
-                i++;
-                continue;
+                break;
             }
 
-            UINT64 patternStart = strtoull(val1, NULL, 0);
             STR_TO_ULONG(Params->InputBufferSize, val2, s);
             Params->InputBufferData = malloc(Params->InputBufferSize);
             if ( !Params->InputBufferData )
@@ -666,7 +659,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
                 break;
             }
 
-            s = genCustomPattern(patternStart, Params->InputBufferData, Params->InputBufferSize);
+            s = genCustomPattern(patternStart, patternSize, Params->InputBufferData, Params->InputBufferSize);
             if ( s != 0 )
             {
                 EPrint("Generating pattern failed!\n");
@@ -856,7 +849,7 @@ INT genPattern(_Inout_ PVOID Buffer, _In_ ULONG Size)
     UINT8 s = 0;
     UINT8 t = 0;
 
-    if ( !Size || Size > MAX_PATTERN_SIZE )
+    if ( !Size || Size > MAX_DEF_PATTERN_SIZE )
         return ERROR_INVALID_PARAMETER;
 
     for ( f = 'A'; f <= 'Z'; f++ )
@@ -889,43 +882,87 @@ endAligned:
     return 0;
 }
 
-INT genCustomPattern(_In_ UINT64 PatternStart, _Inout_ PVOID Buffer, _In_ ULONG Size)
+INT genCustomPattern(_In_ UINT64 PatternStart, _In_ ULONG PatternSize, _Inout_ PVOID Buffer, _In_ ULONG BufferSize)
 {
     INT s = 0;
+    PUINT8 b = (UINT8*)Buffer;
     UINT64 i = 0;
     UINT64 v = 0;
-    UINT8 hw = 0x10;
-    HEX_CHAR_WIDTH(PatternStart, hw);
-    hw /= 2;
-    hw = ( hw==3) ? 4 : (hw>4&&hw<9) ? 8 : hw;
-    UINT64 end = Size/hw;
+    UINT64 end = BufferSize - ( BufferSize % PatternSize );
+    UINT8 rest = (UINT8)(BufferSize % PatternSize);
 
     DPrint("PatternStart: 0x%llx\n", PatternStart);
-    DPrint("hw: 0x%x\n", hw);
+    DPrint("PatternSize: 0x%x\n", PatternSize);
     DPrint("end: 0x%llx\n", end);
+    
+    v = PatternStart;
 
-    for ( i = 0, v = PatternStart; i < end; i++, v++ )
+    for ( i = 0; i < end; i+=PatternSize )
     {
         DPrint("[%llu] v: 0x%llx\n", i, v);
-        switch ( hw )
+        switch ( PatternSize )
         {
             case 1:
-                ((UINT8*)Buffer)[i] = (UINT8)v;
+                b[i] = (UINT8)v;
                 break;
             case 2:
-                ((UINT16*)Buffer)[i] = swapUint16((UINT16)v);
+                *(PUINT16)&b[i] = ((UINT16)v);
+                break;
+            case 3:
+                b[i] =   (UINT8)((v & 0x0000FFu));
+                b[i+1] = (UINT8)((v & 0x00FF00u) >> 0x08u);
+                b[i+2] = (UINT8)((v & 0xFF0000u) >> 0x10u);
                 break;
             case 4:
-                ((UINT32*)Buffer)[i] = swapUint32((UINT32)v);
+                *(PUINT32)&b[i] = ((UINT32)v);
+                break;
+            case 5:
+                b[i] =   (UINT8)((v & 0x00000000FFu));
+                b[i+1] = (UINT8)((v & 0x000000FF00ull) >> 0x08u);
+                b[i+2] = (UINT8)((v & 0x0000FF0000ull) >> 0x10u);
+                b[i+3] = (UINT8)((v & 0x00FF000000ull) >> 0x18u);
+                b[i+4] = (UINT8)((v & 0xFF00000000ull) >> 0x20u);
+                break;
+            case 6:
+                b[i] =   (UINT8)((v & 0x0000000000FFu));
+                b[i+1] = (UINT8)((v & 0x00000000FF00ull) >> 0x08u);
+                b[i+2] = (UINT8)((v & 0x000000FF0000ull) >> 0x10u);
+                b[i+3] = (UINT8)((v & 0x0000FF000000ull) >> 0x18u);
+                b[i+4] = (UINT8)((v & 0x00FF00000000ull) >> 0x20u);
+                b[i+5] = (UINT8)((v & 0xFF0000000000ull) >> 0x28u);
+                break;
+            case 7:
+                b[i] =   (UINT8)((v & 0x000000000000FFu));
+                b[i+1] = (UINT8)((v & 0x0000000000FF00ull) >> 0x08u);
+                b[i+2] = (UINT8)((v & 0x00000000FF0000ull) >> 0x10u);
+                b[i+3] = (UINT8)((v & 0x000000FF000000ull) >> 0x18u);
+                b[i+4] = (UINT8)((v & 0x0000FF00000000ull) >> 0x20u);
+                b[i+5] = (UINT8)((v & 0x00FF0000000000ull) >> 0x28u);
+                b[i+6] = (UINT8)((v & 0xFF000000000000ull) >> 0x30u);
                 break;
             case 8:
-                ((UINT64*)Buffer)[i] = swapUint64((UINT64)v);
+                *(PUINT64)&b[i] = ((UINT64)v);
                 break;
             default:
                 EPrint("Not aligned!\n");
                 s = ERROR_INVALID_PARAMETER;
                 break;
         }
+
+        v = swapUint64(v);
+        if ( PatternSize < 8 )
+            v = v >> ((8-PatternSize) * 8);
+        v++;
+        if ( PatternSize < 8 )
+            v = v << ((8-PatternSize) * 8);
+        v = swapUint64(v);
+    }
+
+    for ( i = 0; i < rest; i++ )
+    {
+        UINT64 mask = 0xFFull << (i*8);
+        UINT64 shift = (0x08ull*i);
+        b[end+i] = (UINT8)((v & mask) >> shift);
     }
 
     return s;
@@ -986,7 +1023,7 @@ void printUsage()
            "[/c <ioctl>] "
            "[/os <size>] "
            "[/is|/ir|/ip <size>] "
-           "[/ipc <start> <size>] "
+           "[/ipc <pattern> <size>] "
            "[/i(x|b|w|d|q|a|u) <data>] "
            "[/if <file>] "
            "[/s <sleep>] "
@@ -1020,8 +1057,8 @@ void printHelp()
     printf("    * /iu <Data> as unicode (utf-16) text.\n");
     printf("    * /if Input data is read as binary data from the file <path>.\n");
     printf("    * /ir Input data will be filled with <size> random bytes.\n");
-    printf("    * /ip Input data will be filled with <size> pattern bytes (Aa0Aa1...).\n");
-    printf("    * /ipc Input data will be filled with <size> custom pattern bytes, starting from <start>.\n");
+    printf("    * /ip Input data will be filled with <size> default pattern bytes (Aa0Aa1...).\n");
+    printf("    * /ipc Input data will be filled with <size> custom pattern bytes, starting from <pattern>, incremented by 1.\n");
     printf("    * /is Input data will be filled with <size> 'A's.\n");
     printf(" - /s Duration of a possible sleep after device io\n");
     printf(" - /t Just test the device for accessibility. Don't send data.\n");

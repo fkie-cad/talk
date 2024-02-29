@@ -4,8 +4,8 @@ Talks to a device using NtDeviceIoControl.
 
 
 ## Version
-2.1.6  
-Last changed: 28.02.2024
+2.1.7  
+Last changed: 29.02.2024
 
 ## Contents
 * [Requirements](#requirements)
@@ -38,7 +38,7 @@ $ Talk.exe /n DeviceName
            [/c <ioctl>] 
            [/os <size>]
            [/is|/ir|/ip <size>]
-           [/ipc <start> <size>]
+           [/ipc <pattern> <size>]
            [/i(x|b|w|d|q|a|u) <data>]
            [/s sleep] 
            [/da <flags>] 
@@ -51,7 +51,7 @@ $ Talk.exe /n DeviceName
 
 **Options**
 - /n DeviceName to call. I.e. "\Device\Beep"
-- /c The desired IOCTL in hex.
+- /c The desired IOCTL interpreted as a hex number.
 - /os Size of OutputBuffer.
 
 **Input Data**
@@ -64,15 +64,15 @@ $ Talk.exe /n DeviceName
 - /iu Input data as unicode (utf-16) text.
 - /if Input data is read from the binary file from \<path\>.
 - /ir Input data will be filled with \<size\> random bytes.
-- /ip Input data will be filled with \<size\> pattern bytes (Aa0Aa1...).\n");
-- /ipc Input data will be filled with \<size\> custom pattern bytes, starting from \<start\>.\n");
+- /ip Input data will be filled with \<size\> default pattern bytes (Aa0Aa1...).
+- /ipc Input data will be filled with \<size\> custom pattern bytes, starting from \<pattern\>, incremented by 1.
 - /is Input data will be filled with \<size\> 'A's.
 
- **Other**
+**Other**
 - /s Duration of a possible sleep after device io.
 - /t Just test the device for accessibility. Don't send data.
 - /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x12019f
-- /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE =  0x3
+- /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x3
 
  **Printing style for output buffer**
 - /pb Print plain space separated bytes
@@ -90,16 +90,17 @@ $ Talk.exe /n DeviceName
 
 **Remarks**  
 A sleep (`/s`) may be useful with asynchronous calls like Beep.  
-Custom patterns (`/ipc`) are auto aligned to 1, 2, 4 or 8 bytes.  
+
+The custom `<pattern>` of `/ipc` is interpreted as a byte string, i.e. the input of `/ipc 414243 10` will result in the input data of `41 42 43 41 42 44 41 42 45 41`.
 
 
-### Example
+### Examples
 Call beep
 ```bash
 $ Talk.exe /n \Device\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e
 ```
 
-Query Name and GUID of HarddiskVolume1
+Query Name and GUID of HarddiskVolume1 (Admin rights required)
 ```bash
 $ Talk.exe /n \Device\HarddiskVolume1 /c 0x4d0008 /os 0x100 /pu
 $ Talk.exe /n \Device\HarddiskVolume1 /c 0x4d0018 /os 0x10 /pb
@@ -108,6 +109,7 @@ $ Talk.exe /n \Device\HarddiskVolume1 /c 0x4d0018 /os 0x10 /pb
 
 ## Copyright, Credits & Contact
 Published under [GNU GENERAL PUBLIC LICENSE](LICENSE).
+
 
 ### Authors
 - Viviane Zwanger ([viviane.zwanger@fkie.fraunhofer.de](mailto:viviane.zwanger@fkie.fraunhofer.de))

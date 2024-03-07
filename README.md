@@ -105,7 +105,7 @@ The custom `<pattern>` of `/ipc` is interpreted as a byte string, i.e. the input
 Call beep
 ```bash
 $ Talk.exe /n \Device\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e
-$ Talk.exe /n \Device\Beep /c 0x10000 /id 0x202 0x83e /s 0x083e
+$ Talk.exe /n \Device\Beep /c 0x10000 /id 0x202 /id 0x83e /s 0x083e
 ```
 
 Query Name and GUID of HarddiskVolume1 (Admin rights required) with different print options

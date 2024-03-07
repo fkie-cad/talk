@@ -14,8 +14,8 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.1.7"
-#define LAST_CHANGED "29.02.2024"
+#define VERSION "2.1.8"
+#define LAST_CHANGED "07.03.2024"
 
 
 #define PRINT_MODE_NONE         (0x00) // 0000
@@ -35,6 +35,11 @@
 
 #define MAX_DEF_PATTERN_SIZE (26*26*10*3)
 
+#define MAX_INTS (0x10)
+typedef struct _INPUT_INT {
+    INT Id;
+    INT Size;
+} INPUT_INT, *PINPUT_INT;
 
 typedef struct CmdParams {
     CHAR* DeviceName;
@@ -58,6 +63,8 @@ typedef struct CmdParams {
 
 INT genPattern(_Inout_ PVOID Buffer, _In_ ULONG Size);
 INT genCustomPattern(_In_ UINT64 PatternStart, _In_ ULONG PatternSize, _Inout_ PVOID Buffer, _In_ ULONG BufferSize);
+
+int parseInts(_In_ int argc, _In_ char** argv, _In_ PINPUT_INT ints, _In_ INT intsCount, _Inout_ CmdParams* Params);
 
 BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params);
 BOOL checkArgs(_In_ CmdParams* Params);
@@ -157,18 +164,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     
     HANDLE event;
 
-    if ( Params->InputBufferSize > 0 && !Params->InputBufferData )
-    {
-        inputBuffer = malloc(Params->InputBufferSize);
-        if ( !inputBuffer )
-        {
-            status = GetLastError();
-            printf("Error (0x%08x): inputBuffer malloc failed\n", status);
-            goto clean;
-        }
-        memset(inputBuffer, Params->FillValue, Params->InputBufferSize);
-    }
-    else if ( Params->InputBufferData )
+    if ( Params->InputBufferData )
     {
         inputBuffer = Params->InputBufferData;
     }
@@ -186,15 +182,6 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
         memset(outputBuffer, 0, Params->OutputBufferSize);
     }
 
-    printf("Launching I/O Request Packet...\n");
-
-    if ( inputBuffer && Params->Flags.Verbose )
-    {
-        printf(" - inputBuffer:\n");
-        PrintMemCols8(inputBuffer, Params->InputBufferSize, 0);
-        printf("\n");
-    }
-
     status = NtCreateEvent(&event,
                            FILE_ALL_ACCESS,
                            0,
@@ -202,11 +189,15 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
                            0);
     if ( status != STATUS_SUCCESS )
     {
-        printf("ERROR (0x%08x): Create event failed (%s).\n", status, getStatusString(status));
+        EPrint("Create event failed! (0x%08x)\n", status);
+        if ( Params->Flags.Verbose )
+            printf("    %s\n", getStatusString(status));
         goto clean;
     }
 
     RtlZeroMemory(&iosb, sizeof(iosb));
+    
+    printf("Launching I/O Request Packet...\n");
 
     status = NtDeviceIoControlFile(
                 Device,
@@ -220,18 +211,31 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
                 outputBuffer,
                 Params->OutputBufferSize
             );
-
+    
+    if ( Params->Flags.Verbose )
+    {
+        printf("returned\n");
+        printf("  status: 0x%x\n",status);
+        printf("  iosb.status: 0x%x\n",iosb.Status);
+    }
     if ( status == STATUS_PENDING )
     {
+        if ( Params->Flags.Verbose )
+        {
+            printf("Pending\n");
+            printf("Waiting for event to signal.\n");
+        }
         status = NtWaitForSingleObject(event, 0, 0);
     }
 
     if ( !NT_SUCCESS(status) )
     {
-        printf("ERROR (0x%08x): DeviceIo failed!\n"
-               " %s.\n", 
-               status, getStatusString(status));
-        printf(" iosb info: 0x%08x\n", (ULONG)iosb.Information);
+        EPrint("DeviceIo failed! (0x%08x)\n", status);
+        if ( Params->Flags.Verbose )
+        {
+            printf("    %s\n", getStatusString(status));
+            printf("    iosb info: 0x%08x\n", (ULONG)iosb.Information);
+        }
         goto clean;
     };
 
@@ -244,9 +248,9 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     }
 
     printf("\n");
-    printf("Answer received.\n----------------\n");
     bytesReturned = (ULONG)iosb.Information;
     printf("The driver returned 0x%x bytes:\n", bytesReturned);
+    printf("----------------\n");
     if ( bytesReturned && bytesReturned <= Params->OutputBufferSize )
     {
 // warning C6385: Reading invalid data from 'outputBuffer':  the readable size is 'Params->OutputBufferSize' bytes, but '2' bytes may be read ??
@@ -283,7 +287,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
         }
 #pragma warning ( default : 6385 )
     }
-    printf("\n----------------\n");
+    printf("----------------\n");
 
 
 clean:
@@ -322,33 +326,21 @@ clean:
     } \
 }
 
-#define PARSE_ID_NUMBER(__buffer__, __bufferSize__, __size__, __status__, __type__, __value__) \
-{ \
-    __buffer__ = malloc(__size__); \
-    if ( !__buffer__ ) \
-    { \
-        __status__ = ERROR_NOT_ENOUGH_MEMORY; \
-        EPrint("No memory for input data!\n"); \
-        break; \
-    } \
-     \
-    __try { \
-        *(__type__*)__buffer__ = (__type__)strtoull(__value__, NULL, 0); \
-    } \
-    __except ( EXCEPTION_EXECUTE_HANDLER ) \
-    { \
-        __status__ = GetExceptionCode(); \
-        printf("[X] Exception parsing number! (0x%x)\n", (__status__)); \
-        break; \
-    } \
-    __bufferSize__ = __size__; \
-}
-
 #define CONTINUE_IF_ID_SET(__id__, __i__) \
 { \
     if ( __id__ ) \
     { \
-        printf("INFO: InputData already set! Skipping!\n"); \
+        printf("[i] InputData already set! Skipping!\n"); \
+        __i__++; \
+        continue; \
+    } \
+}
+
+#define CONTINUE_IF_MAX_INT_COUNT(__cnt__, __i__) \
+{ \
+    if ( __cnt__ >= MAX_INTS ) \
+    { \
+        DPrint("[i] Maximum number of input integers reached!\n Skipping!\n"); \
         __i__++; \
         continue; \
     } \
@@ -371,6 +363,9 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
 
     PWCHAR ntPath = NULL;
     HANDLE file = NULL;
+
+    INT intCount = 0;
+    INPUT_INT ints[MAX_INTS] = { 0 };
     
     ZeroMemory(Params, sizeof(CmdParams));
     Params->DesiredAccess = FILE_GENERIC_READ|FILE_GENERIC_WRITE;
@@ -387,14 +382,14 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
 
         if ( IS_1C_ARG(arg, 'n') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No name set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No name set!\n");
 
             Params->DeviceName = val1;
             i++;
         }
         else if ( IS_2C_ARG(arg, 'os') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No output length set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No output length set!\n");
 
             STR_TO_ULONG(Params->OutputBufferSize, val1, s);
 
@@ -402,15 +397,15 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_1C_ARG(arg, 'c') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No ioctl code set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No ioctl code set!\n");
   
             STR_TO_ULONG_X(Params->IOCTL, val1, s);
 
             i++;
         }
-        else if ( IS_2C_ARG(arg, 'ix') )
+        else if ( IS_2C_ARG(arg, 'ix') || IS_2C_ARG(arg, 'ih') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No hex data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No hex data set!\n");
 
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
@@ -424,47 +419,61 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'ib') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No byte data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No byte data set!\n");
 
-            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
-    
-            PARSE_ID_NUMBER(Params->InputBufferData, Params->InputBufferSize, 1, s, UINT8, val1);
+            //CONTINUE_IF_ID_SET(Params->InputBufferData, i);
+            CONTINUE_IF_MAX_INT_COUNT(intCount, i);
+
+            //ints[intCount] = { .Id = i+1, .Size = 1 };
+            //ints[intCount] = { i+1, 1 };
+            ints[intCount].Id = i+1;
+            ints[intCount].Size = 1;
+            intCount++;
             
             i++;
         }
         else if ( IS_2C_ARG(arg, 'iw') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No word data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No word data set!\n");
 
-            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
-
-            PARSE_ID_NUMBER(Params->InputBufferData, Params->InputBufferSize, 2, s, UINT16, val1);
+            //CONTINUE_IF_ID_SET(Params->InputBufferData, i);
+            CONTINUE_IF_MAX_INT_COUNT(intCount, i);
+            
+            ints[intCount].Id = i+1;
+            ints[intCount].Size = 2;
+            intCount++;
 
             i++;
         }
         else if ( IS_2C_ARG(arg, 'id') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No dword data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No dword data set!\n");
+            
+            CONTINUE_IF_MAX_INT_COUNT(intCount, i);
+            //CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
-            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
-
-            PARSE_ID_NUMBER(Params->InputBufferData, Params->InputBufferSize, 4, s, UINT32, val1);
+            ints[intCount].Id = i+1;
+            ints[intCount].Size = 4;
+            intCount++;
 
             i++;
         }
         else if ( IS_2C_ARG(arg, 'iq') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No qword data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No qword data set!\n");
+            
+            CONTINUE_IF_MAX_INT_COUNT(intCount, i);
+            //CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
-            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
-
-            PARSE_ID_NUMBER(Params->InputBufferData, Params->InputBufferSize, 8, s, UINT64, val1);
+            ints[intCount].Id = i+1;
+            ints[intCount].Size = 8;
+            intCount++;
 
             i++;
         }
         else if ( IS_2C_ARG(arg, 'ia') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No ascii string data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No ascii string data set!\n");
 
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
@@ -485,7 +494,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'iu') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No unicode string data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No unicode string data set!\n");
 
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
@@ -506,7 +515,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'if') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No file data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No file data set!\n");
 
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
@@ -583,7 +592,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'ir') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No random length set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No random length set!\n");
 
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
@@ -608,7 +617,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'ip') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No pattern length set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No pattern length set!\n");
 
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
@@ -633,10 +642,10 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_3C_ARG(arg, 'ipc') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No pattern start value set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No pattern start value set!\n");
             
             val2 = GET_ARG_VALUE(argc, argv, i, 2);
-            BREAK_ON_NOT_A_VALUE(val2, s, "ERROR: No pattern length set!\n");
+            BREAK_ON_NOT_A_VALUE(val2, s, "[e] No pattern length set!\n");
             
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
@@ -671,14 +680,9 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'is') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No input length set!\n");
-
-            if ( Params->InputBufferData )
-            {
-                printf("INFO: InputData already set! Skipping!\n");
-                i++;
-                continue;
-            }
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No input length set!\n");
+            
+            CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
             STR_TO_ULONG(Params->InputBufferSize, val1, s);
 
@@ -686,7 +690,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'da') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No desired access flag set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No desired access flag set!\n");
 
             STR_TO_ULONG(Params->DesiredAccess, val1, s);
 
@@ -694,7 +698,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_1C_ARG(arg, 's') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No sleep length set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No sleep length set!\n");
 
             STR_TO_ULONG(Params->Sleep, val1, s);
 
@@ -702,7 +706,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'sa') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "ERROR: No shareAccess flag set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No shareAccess flag set!\n");
 
             STR_TO_ULONG(Params->ShareAccess, val1, s);
 
@@ -754,15 +758,23 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else
         {
-            printf("INFO: Unknown arg type \"%s\"\n", argv[i]);
+            printf("[i] Unknown arg type \"%s\"\n", argv[i]);
         }
     }
 
     if ( s != 0 )
     {
         printf("\n");
+        goto clean;
     }
     
+    s = parseInts(argc, argv, ints, intCount, Params);
+    if ( s != 0 )
+    {
+        goto clean;
+    }
+
+    // fill input with a fill value, if just /is has been set
     if ( Params->InputBufferSize > 0 && !Params->InputBufferData )
     {
         Params->InputBufferData = malloc(Params->InputBufferSize);
@@ -782,6 +794,81 @@ clean:
         NtClose(file);
 
     return s==0;
+}
+
+// parse input ints to an input "struct"
+int parseInts(_In_ int argc, _In_ char** argv, _In_ PINPUT_INT ints, _In_ INT intsCount, _Inout_ CmdParams* Params)
+{
+    int s = 0;
+    INT i;
+
+    // max is MAX_INTS * 8 = 0x80
+    UINT32 neededSize = 0;
+
+    if ( !intsCount )
+        return 0;
+
+    if ( Params->InputBufferData )
+    {
+        printf("[i] InputData already set! Skipping!\n");
+        return 0;
+    }
+
+    // get needed size
+    for ( i = 0; i < intsCount; i++ )
+    {
+        neededSize += ints[i].Size;
+    }
+
+    // allocate buffer
+    Params->InputBufferSize = neededSize;
+    Params->InputBufferData = malloc(Params->InputBufferSize);
+    if ( !Params->InputBufferData )
+    {
+        s = GetLastError();
+        EPrint("inputBuffer malloc failed! (0x%x)\n", s);
+        goto clean;
+    }
+
+    // fill buffer
+    PUINT8 ptr = Params->InputBufferData;
+    for ( i = 0; i < intsCount; i++ )
+    {
+        // should not happen
+        if ( ints[i].Id >= argc )
+        {
+            s = ERROR_INVALID_PARAMETER;
+            EPrint("Invalide int id! (0x%x)\n", s);
+            goto clean;
+        }
+
+        switch ( ints[i].Size )
+        {
+            case 1:
+                *(PUINT8)ptr = (UINT8)strtoul(argv[ints[i].Id], NULL, 0);
+                ptr++;
+                break;
+            case 2:
+                *(PUINT16)ptr = (UINT16)strtoul(argv[ints[i].Id], NULL, 0);
+                ptr+=2;
+                break;
+            case 4:
+                *(PUINT32)ptr = (UINT32)strtoul(argv[ints[i].Id], NULL, 0);
+                ptr+=4;
+                break;
+            case 8:
+                *(PUINT64)ptr = (UINT64)strtoull(argv[ints[i].Id], NULL, 0);
+                ptr+=8;
+                break;
+            default:
+                s = ERROR_INVALID_PARAMETER;
+                goto clean;
+        }
+    }
+
+clean:
+
+    return s;
 }
 
 int openDevice(_Out_ PHANDLE Device, _In_ CHAR* DeviceNameA, _In_ ACCESS_MASK DesiredAccess, _In_ ULONG ShareAccess)
@@ -1077,6 +1164,6 @@ void printHelp()
     printf(" - /v More verbose output.\n");
     printf("\n");
     printf("Example:\n");
-    printf("$ Talk.exe /n \\Device\\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e\n");
+    printf("$ Talk.exe /n \\Device\\Beep /c 0x10000 /id 0x202 /id 0x83e /s 0x083e\n");
     printf("$ Talk.exe /n \\Device\\HarddiskVolume1 /c 0x4d0008 /os 0x100 /pu\n");
 }

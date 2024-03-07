@@ -4,14 +4,14 @@ Talks to a device using NtDeviceIoControl.
 
 
 ## Version
-2.1.7  
-Last changed: 29.02.2024
+2.1.8  
+Last changed: 07.03.2024
 
 ## Contents
 * [Requirements](#requirements)
 * [Build](#build)
 * [Usage](#usage)
-    * [Example](#example)
+    * [Examples](#examples)
 * [Copyright, Credits & Contact](#copyright,-credits-&-contact)
     * [Authors](#authors)
 
@@ -91,6 +91,13 @@ $ Talk.exe /n DeviceName
 **Remarks**  
 A sleep (`/s`) may be useful with asynchronous calls like Beep.  
 
+Input integers (`\ib`, `\iw`, `\id`, `\iq`) can be chained together to form a simple struct.
+This may sometimes be more convenient as to give a plain hex string.
+See the second beep example call to see an example of this. 
+There the input struct would consist out of two DWORDs.
+The resulting input size would be 8 bytes, equal to the first example.
+The order the input ints are given in does matter.
+
 The custom `<pattern>` of `/ipc` is interpreted as a byte string, i.e. the input of `/ipc 414243 10` will result in the input data of `41 42 43 41 42 44 41 42 45 41`.
 
 
@@ -98,9 +105,10 @@ The custom `<pattern>` of `/ipc` is interpreted as a byte string, i.e. the input
 Call beep
 ```bash
 $ Talk.exe /n \Device\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e
+$ Talk.exe /n \Device\Beep /c 0x10000 /id 0x202 0x83e /s 0x083e
 ```
 
-Query Name and GUID of HarddiskVolume1 (Admin rights required)
+Query Name and GUID of HarddiskVolume1 (Admin rights required) with different print options
 ```bash
 $ Talk.exe /n \Device\HarddiskVolume1 /c 0x4d0008 /os 0x100 /pu
 $ Talk.exe /n \Device\HarddiskVolume1 /c 0x4d0018 /os 0x10 /pb

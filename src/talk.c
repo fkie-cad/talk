@@ -185,7 +185,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     status = NtCreateEvent(&event,
                            FILE_ALL_ACCESS,
                            0,
-                           0,
+                           NotificationEvent,
                            0);
     if ( status != STATUS_SUCCESS )
     {
@@ -250,7 +250,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     printf("\n");
     bytesReturned = (ULONG)iosb.Information;
     printf("The driver returned 0x%x bytes:\n", bytesReturned);
-    printf("----------------\n");
+    printf("-------------------------------\n");
     if ( bytesReturned && bytesReturned <= Params->OutputBufferSize )
     {
 // warning C6385: Reading invalid data from 'outputBuffer':  the readable size is 'Params->OutputBufferSize' bytes, but '2' bytes may be read ??
@@ -287,7 +287,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
         }
 #pragma warning ( default : 6385 )
     }
-    printf("----------------\n");
+    printf("-------------------------------\n");
 
 
 clean:
@@ -296,6 +296,9 @@ clean:
 
     if ( outputBuffer )
         free(outputBuffer);
+
+    if ( event )
+        NtClose(event);
 
     return status;
 }
@@ -546,7 +549,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             }
             *(PUINT64)ntPath = NT_PATH_PREFIX_W;
 
-            s = openFile(&file, ntPath, FILE_GENERIC_READ|SYNCHRONIZE, FILE_SHARE_READ);
+            s = openFile(&file, ntPath, FILE_GENERIC_READ, FILE_SHARE_READ);
             if ( s != 0 )
             {
                 break;

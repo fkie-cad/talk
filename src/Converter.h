@@ -18,19 +18,24 @@ uint64_t swapUint64(uint64_t value);
 
 
 #define IS_NUM_CHAR(__char__) \
-    ( __char__ >= '0' && __char__ <= '9' )
+    ( (__char__) >= '0' && (__char__) <= '9' )
 
 #define IS_LC_HEX_CHAR(__char__) \
-    ( __char__ >= 'a' && __char__ <= 'f' )
+    ( (__char__) >= 'a' && (__char__) <= 'f' )
 
 #define IS_UC_HEX_CHAR(__char__) \
-    ( __char__ >= 'A' && __char__ <= 'F' )
+    ( (__char__) >= 'A' && (__char__) <= 'F' )
 
 #define IN_HEX_RANGE(__char__) \
-    ( IS_NUM(__char__) || ( __char__ >= 'a' && __char__ <= 'f' )  || ( __char__ >= 'A' && __char__ <= 'F' ) )
+    ( IS_NUM_CHAR(__char__) || IS_LC_HEX_CHAR(__char__)  || IS_UC_HEX_CHAR(__char__) )
 
 /**
  * Parse plain byte string into byte array
+ * 
+ * @param Raw const char* raw byte string (char array) input buffer
+ * @param Buffer PUINT8* pointer to the output buffer, either points to NULL (will be allocated in the function) or to an already allocated buffer
+ * @param Size PULONG pointer to the output buffer size, will be filled with the number of parsed bytes. If *Buffer!=NULL it will also be used as the provided *Buffer's size.
+ * @param MaxBytes ULONG the maximum permitted number of bytes to be parsed
  */
 INT parsePlainBytes(
     _In_ const char* Raw, 

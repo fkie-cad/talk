@@ -94,17 +94,20 @@ A sleep (`/s`) may be useful with asynchronous calls like Beep.
 Input integers (`\ib`, `\iw`, `\id`, `\iq`) can be chained together to form a simple struct.
 This may sometimes be more convenient as to give a plain hex string.
 See the second beep example call to see an example of this. 
-There the input struct would consist out of two DWORDs.
+There the input struct would consist out of two ULONGs.
 The resulting input size would be 8 bytes, equal to the first example.
 The order the input ints are given in does matter.
 
-The custom `<pattern>` of `/ipc` is interpreted as a byte string, i.e. the input of `/ipc 414243 10` will result in the input data of `41 42 43 41 42 44 41 42 45 41`.
+The custom `<pattern>` of `/ipc` is interpreted as a byte string, 
+i.e. the input of `/ipc 414243 10` will result in the input data of `41 42 43 41 42 44 41 42 45 41`.
 
 
 ### Examples
 Call beep
 ```bash
+# with a byte string
 $ Talk.exe /n \Device\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e
+# with two ulongs
 $ Talk.exe /n \Device\Beep /c 0x10000 /id 0x202 /id 0x83e /s 0x083e
 ```
 

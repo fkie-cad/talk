@@ -21,7 +21,7 @@ set /a rtl=0
 set platform=x64
 set configuration=Debug
 
-set pts=v142
+set pts=v143
 
 set prog_proj=talk.vcxproj
 
@@ -58,14 +58,6 @@ GOTO :ParseParams
     IF /i "%~1"=="/dp" (
         SET /a "debug_print=%~2"
         SHIFT
-        goto reParseParams
-    )
-    IF /i "%~1"=="/dpf" (
-        SET /a "debug_print=%debug_print%|DP_FLAG"
-        goto reParseParams
-    )
-    IF /i "%~1"=="/epf" (
-        set /a "debug_print=%debug_print%|EP_FLAG"
         goto reParseParams
     )
 

@@ -10,12 +10,14 @@
 #include "Args.h"
 #include "print.h"
 #include "crypto/BRand.h"
+#include "privs.h"
+#include "helper.h"
 
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.1.8"
-#define LAST_CHANGED "07.03.2024"
+#define VERSION "2.1.9"
+#define LAST_CHANGED "06.11.2025"
 
 
 #define PRINT_MODE_NONE         (0x00) // 0000
@@ -35,11 +37,18 @@
 
 #define MAX_DEF_PATTERN_SIZE (26*26*10*3)
 
+#define MAX_SE_COUNT (0x10)
+
 #define MAX_INTS (0x10)
 typedef struct _INPUT_INT {
     INT Id;
     INT Size;
 } INPUT_INT, *PINPUT_INT;
+
+typedef struct _SE {
+    PULONG List;
+    ULONG Count;
+} SE, *PSE;
 
 typedef struct CmdParams {
     CHAR* DeviceName;
@@ -50,6 +59,7 @@ typedef struct CmdParams {
     ULONG Sleep;
     ACCESS_MASK DesiredAccess;
     ULONG ShareAccess;
+    SE Se;
     struct {
         ULONG Verbose:1;
         ULONG PrintMode:4;
@@ -65,6 +75,7 @@ INT genPattern(_Inout_ PVOID Buffer, _In_ ULONG Size);
 INT genCustomPattern(_In_ UINT64 PatternStart, _In_ ULONG PatternSize, _Inout_ PVOID Buffer, _In_ ULONG BufferSize);
 
 int parseInts(_In_ int argc, _In_ char** argv, _In_ PINPUT_INT ints, _In_ INT intsCount, _Inout_ CmdParams* Params);
+INT parseSe(_In_ INT argc, _In_reads_(argc) CHAR** argv, _Inout_ PSE Se, _In_ PINT Ids, _In_ INT IdsCount);
 
 BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params);
 BOOL checkArgs(_In_ CmdParams* Params);
@@ -122,6 +133,21 @@ int _cdecl main(int argc, char** argv)
         printArgs(&params);
 
 
+
+    if ( params.Se.Count)
+    {
+        s = setPrivileges(params.Se.List, params.Se.Count, TRUE);
+        if ( !NT_SUCCESS(s) )
+        {
+            EPrint("Requested privileges could not be assigned! (0x%x)\n", s);
+            params.Se.Count = 0;
+            goto clean;
+        }
+        DPrint("SE privileges assigned.\n");
+    }
+
+
+
     s = openDevice(&device, params.DeviceName, params.DesiredAccess, params.ShareAccess);
     if ( s != 0 )
     {
@@ -129,7 +155,7 @@ int _cdecl main(int argc, char** argv)
     }
     else if ( params.TestHandle )
     {
-        printf("Device opened succcessfully: %p\n", device);
+        printf("Device opened successfully: %p\n", device);
         goto clean;
     }
     else
@@ -144,6 +170,16 @@ int _cdecl main(int argc, char** argv)
     s = generateIoRequest(device, &params);
 
 clean:
+    if ( params.Se.Count )
+    {
+        s = setPrivileges(params.Se.List, params.Se.Count, FALSE);
+        if ( !NT_SUCCESS(s) )
+        {
+            EPrint("Requested privileges could not be resigned! (0x%x)\n", s);
+        }
+    }
+    if ( params.Se.List != NULL )
+        free(params.Se.List);
     if ( params.InputBufferData != NULL )
         free(params.InputBufferData);
 
@@ -162,7 +198,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     PUINT8 inputBuffer = NULL;
     PUINT8 outputBuffer = NULL;
     
-    HANDLE event;
+    HANDLE event = NULL;
 
     if ( Params->InputBufferData )
     {
@@ -248,9 +284,15 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     }
 
     printf("\n");
+    
     bytesReturned = (ULONG)iosb.Information;
+
     printf("The driver returned 0x%x bytes:\n", bytesReturned);
-    printf("-------------------------------\n");
+    printf("-----------------------------");
+    UINT32 zc = countHexChars(bytesReturned);
+    for ( UINT32 zci = 0; zci < zc; zci++ ) printf("-");
+    printf("\n");
+
     if ( bytesReturned && bytesReturned <= Params->OutputBufferSize )
     {
 // warning C6385: Reading invalid data from 'outputBuffer':  the readable size is 'Params->OutputBufferSize' bytes, but '2' bytes may be read ??
@@ -287,7 +329,9 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
         }
 #pragma warning ( default : 6385 )
     }
-    printf("-------------------------------\n");
+    printf("-----------------------------");
+    for ( UINT32 zci = 0; zci < zc; zci++ ) printf("-");
+    printf("\n");
 
 
 clean:
@@ -369,6 +413,9 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
 
     INT intCount = 0;
     INPUT_INT ints[MAX_INTS] = { 0 };
+
+    INT seId[MAX_SE_COUNT] = {0};
+    INT seIdCount = 0;
     
     ZeroMemory(Params, sizeof(CmdParams));
     Params->DesiredAccess = FILE_GENERIC_READ|FILE_GENERIC_WRITE;
@@ -715,6 +762,20 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
 
             i++;
         }
+        else if ( IS_2C_ARG(arg, 'se') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No SE value set!\n");
+            if ( seIdCount >= MAX_SE_COUNT )
+            {
+                printf("Maximum number of se values reached!");
+                continue;
+            }
+
+            seId[seIdCount] = i+1;
+            seIdCount++;
+
+            i++;
+        }
         else if ( IS_1C_ARG(arg, 't') )
         {
             Params->TestHandle = TRUE;
@@ -772,6 +833,12 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
     }
     
     s = parseInts(argc, argv, ints, intCount, Params);
+    if ( s != 0 )
+    {
+        goto clean;
+    }
+    
+    s = parseSe(argc, argv, &Params->Se, seId, seIdCount);
     if ( s != 0 )
     {
         goto clean;
@@ -841,7 +908,7 @@ int parseInts(_In_ int argc, _In_ char** argv, _In_ PINPUT_INT ints, _In_ INT in
         if ( ints[i].Id >= argc )
         {
             s = ERROR_INVALID_PARAMETER;
-            EPrint("Invalide int id! (0x%x)\n", s);
+            EPrint("Invalid int id! (0x%x)\n", s);
             goto clean;
         }
 
@@ -872,6 +939,93 @@ int parseInts(_In_ int argc, _In_ char** argv, _In_ PINPUT_INT ints, _In_ INT in
 clean:
 
     return s;
+}
+
+INT parseSe(
+    _In_ INT argc, 
+    _In_reads_(argc) CHAR** argv, 
+    _Inout_ PSE Se, 
+    _In_ PINT Ids, 
+    _In_ INT IdsCount
+)
+{
+    INT i;
+    PCHAR arg = NULL;
+    SIZE_T reqSize = 0;
+    ULONG count = 0;
+    
+    if ( IdsCount == 0 )
+        return 0;
+
+    //
+    // get required size of flat array
+
+    for ( i = 0; i < IdsCount; i++ )
+    {
+        if ( Ids[i] >= argc )
+        {
+            Ids[i] = -1;
+            continue;
+        }
+
+        arg = argv[Ids[i]];
+        
+        // sanitization checks
+        if ( arg == NULL || arg[0] == 0 || arg[0] == LIN_PARAM_IDENTIFIER || arg[0] == WIN_PARAM_IDENTIFIER )
+        {
+            Ids[i] = -1;
+            continue;
+        }
+        
+        // value checks
+        UINT32 val = strtoul(arg, NULL, 0);
+        if ( val < SE_MIN_WELL_KNOWN_PRIVILEGE || val > SE_MAX_WELL_KNOWN_PRIVILEGE )
+        {
+            Ids[i] = -1;
+            continue;
+        }
+
+        count++;
+    }
+
+    if ( count == 0 )
+        return -1;
+    
+    reqSize = count * sizeof(UINT32);
+    if ( reqSize > ULONG_MAX )
+        return -1;
+
+
+    //
+    // alloc buffer
+    
+    Se->List = (PULONG)malloc(reqSize);
+    if ( !Se->List )
+        return ERROR_NO_SYSTEM_RESOURCES;
+    RtlZeroMemory(Se->List, reqSize);
+
+    //
+    // fill array buffer with strings
+    
+    ULONG j = 0;
+    for ( i = 0; i < IdsCount; i++ )
+    {
+        if ( Ids[i] == -1)
+        {
+            continue;
+        }
+        
+        arg = argv[Ids[i]];
+        UINT32 val = strtoul(arg, NULL, 0);
+
+        Se->List[j] = val;
+        j++;
+    }
+    Se->Count = j;
+
+    DPrintMemCols32(Se->List, (Se->Count*4), 0);
+
+    return 0;
 }
 
 int openDevice(_Out_ PHANDLE Device, _In_ CHAR* DeviceNameA, _In_ ACCESS_MASK DesiredAccess, _In_ ULONG ShareAccess)
@@ -1119,6 +1273,7 @@ void printUsage()
            "[/s <sleep>] "
            "[/da <flags>] "
            "[/sa <flags>] "
+           "[/se <priv>] "
            "[/t] "
            "[/v] "
            "[/pb|pbs|pc8|pc16|pc32|pc64|pc1|pa|pu] "
@@ -1150,10 +1305,11 @@ void printHelp()
     printf("    * /ip Input data will be filled with <size> default pattern bytes (Aa0Aa1...).\n");
     printf("    * /ipc Input data will be filled with <size> custom pattern bytes, starting from <pattern>, incremented by 1.\n");
     printf("    * /is Input data will be filled with <size> 'A's.\n");
-    printf(" - /s Duration of a possible sleep after device io\n");
+    printf(" - /s Duration of a possible sleep after device io.\n");
     printf(" - /t Just test the device for accessibility. Don't send data.\n");
     printf(" - /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x%x.\n", (FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE));
     printf(" - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x%x.\n", (FILE_SHARE_READ|FILE_SHARE_WRITE));
+    printf(" - /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x%x) times for multiple privileges.\n", MAX_SE_COUNT);
     printf(" - Printing style for output buffer:\n");
     printf("    * /pb Print in plain space separated bytes.\n");
     printf("    * /pbs Print in plain byte string.\n");

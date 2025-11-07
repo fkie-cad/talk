@@ -4,8 +4,8 @@ Talks to a device using NtDeviceIoControl.
 
 
 ## Version
-2.1.8  
-Last changed: 07.03.2024
+2.1.9  
+Last changed: 07.11.2025
 
 ## Contents
 * [Requirements](#requirements)
@@ -43,6 +43,7 @@ $ Talk.exe /n DeviceName
            [/s sleep] 
            [/da <flags>] 
            [/sa <flags>] 
+           [/se <priv>] 
            [/t] 
            [/pb|pbs|pc8|pc16|pc32|pc64|pc1|pa|pu]
            [/v] 
@@ -73,8 +74,9 @@ $ Talk.exe /n DeviceName
 - /t Just test the device for accessibility. Don't send data.
 - /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x12019f
 - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x3
+- /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x10) times for multiple privileges.
 
- **Printing style for output buffer**
+**Printing style for output buffer**
 - /pb Print plain space separated bytes
 - /pbs Print plain byte string
 - /pc8 Print in cols of Address | bytes | ascii chars

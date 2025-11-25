@@ -4,8 +4,8 @@ Talks to a device using NtDeviceIoControl.
 
 
 ## Version
-2.1.9  
-Last changed: 07.11.2025
+2.1.10  
+Last changed: 25.11.2025
 
 ## Contents
 * [Requirements](#requirements)

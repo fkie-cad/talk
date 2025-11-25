@@ -16,8 +16,8 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.1.9"
-#define LAST_CHANGED "06.11.2025"
+#define VERSION "2.1.10"
+#define LAST_CHANGED "25.11.2025"
 
 
 #define PRINT_MODE_NONE         (0x00) // 0000
@@ -288,13 +288,13 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     bytesReturned = (ULONG)iosb.Information;
 
     printf("The driver returned 0x%x bytes:\n", bytesReturned);
-    printf("-----------------------------");
-    UINT32 zc = countHexChars(bytesReturned);
-    for ( UINT32 zci = 0; zci < zc; zci++ ) printf("-");
-    printf("\n");
-
     if ( bytesReturned && bytesReturned <= Params->OutputBufferSize )
     {
+        printf("-----------------------------");
+        UINT32 zc = countHexChars(bytesReturned);
+        for ( UINT32 zci = 0; zci < zc; zci++ ) printf("-");
+        printf("\n");
+
 // warning C6385: Reading invalid data from 'outputBuffer':  the readable size is 'Params->OutputBufferSize' bytes, but '2' bytes may be read ??
 #pragma warning ( disable : 6385 )
         switch ( Params->Flags.PrintMode )
@@ -328,10 +328,14 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
                 break;
         }
 #pragma warning ( default : 6385 )
+        printf("-----------------------------");
+        for ( UINT32 zci = 0; zci < zc; zci++ ) printf("-");
+        printf("\n");
     }
-    printf("-----------------------------");
-    for ( UINT32 zci = 0; zci < zc; zci++ ) printf("-");
-    printf("\n");
+    else if ( bytesReturned > Params->OutputBufferSize )
+    {
+        EPrint("Output buffer to small, adjust its size with the /os parameter.")
+    }
 
 
 clean:

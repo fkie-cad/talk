@@ -4,8 +4,8 @@ Talks to a device using NtDeviceIoControl.
 
 
 ## Version
-2.1.10  
-Last changed: 25.11.2025
+2.2.0  
+Last changed: 12.12.2025
 
 ## Contents
 * [Requirements](#requirements)
@@ -36,10 +36,10 @@ $devcmd> msbuild [talk.vcxproj] [/p:Platform=x86|x64] [/p:Configuration=Debug|Re
 ```bash
 $ Talk.exe /n DeviceName 
            [/c <ioctl>] 
-           [/os <size>]
-           [/is|/ir|/ip <size>]
-           [/ipc <pattern> <size>]
-           [/i(x|b|w|d|q|a|u) <data>]
+           [/is|/ir|/ip|/os|/or|/op <size>] 
+           [/ipc|/opc <pattern> <size>] 
+           [/i|o(x|b|w|d|q|a|u) <data>] 
+           [/if|/of <file>] "
            [/s sleep] 
            [/da <flags>] 
            [/sa <flags>] 
@@ -55,19 +55,37 @@ $ Talk.exe /n DeviceName
 - /c The desired IOCTL interpreted as a hex number.
 - /os Size of OutputBuffer.
 
-**Input Data**
-- /ix Input data as hex byte string.
-- /ib Input data as byte.
-- /iw Input data as word (uint16).
-- /id Input data as dword (uint32).
-- /iq Input data as qword (uint64).
-- /ia Input data as ascii text.
-- /iu Input data as unicode (utf-16) text.
+**Input Data**  
+(The integer types are [chainable](#remarks).)  
+- /ix \<data\> as hex byte string.
+- /ib \<data\> as byte (uint8).
+- /iw \<data\> as word (uint16).
+- /id \<data\> as dword (uint32).
+- /iq \<data\> as qword (uint64).
+- /ia \<data\> as ascii text.
+- /iu \<data\> as unicode (utf-16) text.
 - /if Input data is read from the binary file from \<path\>.
 - /ir Input data will be filled with \<size\> random bytes.
 - /ip Input data will be filled with \<size\> default pattern bytes (Aa0Aa1...).
 - /ipc Input data will be filled with \<size\> custom pattern bytes, starting from \<pattern\>, incremented by 1.
 - /is Input data will be filled with \<size\> 'A's.
+
+**Output Data:**  
+(Sometimes the output buffer might need to be filled as well.)  
+(The integer types are [chainable](#remarks).)  
+- /os Size of OutputBuffer to be filled with zeros. (Most common option.)
+- /ox \<data\> as hex byte string.
+- /ob \<data\> as byte.
+- /ow \<data\> as word (uint16).
+- /od \<data\> as dword (uint32).
+- /oq \<data\> as qword (uint64).
+- /oa \<data\> as ascii text.
+- /ou \<data\> as unicode (utf-16) text.
+- /of Output data is read as binary data from the file <path>.
+- /or Output data will be filled with <size> random bytes.
+- /op Output data will be filled with <size> default pattern bytes (Aa0Aa1...).
+- /opc Output data will be filled with <size> custom pattern bytes, starting from <pattern>, incremented by 1.
+
 
 **Other**
 - /s Duration of a possible sleep after device io.
@@ -90,17 +108,17 @@ $ Talk.exe /n DeviceName
 **Misc**
 - /v More verbose output.
 
-**Remarks**  
+### Remarks
 A sleep (`/s`) may be useful with asynchronous calls like Beep.  
 
-Input integers (`\ib`, `\iw`, `\id`, `\iq`) can be chained together to form a simple struct.
+Integer arguments (`\ib`, `\iw`, `\id`, `\iq`, `\ob`, `\ow`, `\od`, `\oq`) can be chained together to form a simple struct.
 This may sometimes be more convenient as to give a plain hex string.
-See the second beep example call to see an example of this. 
+Check the second beep example call to see an example of this. 
 There the input struct would consist out of two ULONGs.
 The resulting input size would be 8 bytes, equal to the first example.
-The order the input ints are given in does matter.
+The order the integers are given in does matter.
 
-The custom `<pattern>` of `/ipc` is interpreted as a byte string, 
+The custom `<pattern>` of `/ipc` (`/opc`) is interpreted as a byte string, 
 i.e. the input of `/ipc 414243 10` will result in the input data of `41 42 43 41 42 44 41 42 45 41`.
 
 
@@ -122,8 +140,3 @@ $ Talk.exe /n \Device\HarddiskVolume1 /c 0x4d0018 /os 0x10 /pb
 
 ## Copyright, Credits & Contact
 Published under [GNU GENERAL PUBLIC LICENSE](LICENSE).
-
-
-### Authors
-- Viviane Zwanger ([viviane.zwanger@fkie.fraunhofer.de](mailto:viviane.zwanger@fkie.fraunhofer.de))
-- Henning Braun ([henning.braun@fkie.fraunhofer.de](mailto:henning.braun@fkie.fraunhofer.de)) 

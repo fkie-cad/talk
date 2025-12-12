@@ -16,8 +16,8 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.1.10"
-#define LAST_CHANGED "25.11.2025"
+#define VERSION "2.2.0"
+#define LAST_CHANGED "12.12.2025"
 
 
 #define PRINT_MODE_NONE         (0x00) // 0000
@@ -40,10 +40,14 @@
 #define MAX_SE_COUNT (0x10)
 
 #define MAX_INTS (0x10)
-typedef struct _INPUT_INT {
+#define MAX_ONTS (0x10)
+typedef struct _IOPUT_INT {
     INT Id;
     INT Size;
-} INPUT_INT, *PINPUT_INT;
+} 
+IOPUT_INT, *PIOPUT_INT,
+INPUT_INT, *PINPUT_INT,
+OUTPUT_INT, *POUTPUT_INT;
 
 typedef struct _SE {
     PULONG List;
@@ -55,7 +59,8 @@ typedef struct CmdParams {
     ULONG InputBufferSize;
     ULONG OutputBufferSize;
     PUINT8 InputBufferData;
-    ULONG IOCTL;
+    PUINT8 OutputBufferData;
+    ULONG IoCtl;
     ULONG Sleep;
     ACCESS_MASK DesiredAccess;
     ULONG ShareAccess;
@@ -74,10 +79,10 @@ typedef struct CmdParams {
 INT genPattern(_Inout_ PVOID Buffer, _In_ ULONG Size);
 INT genCustomPattern(_In_ UINT64 PatternStart, _In_ ULONG PatternSize, _Inout_ PVOID Buffer, _In_ ULONG BufferSize);
 
-int parseInts(_In_ int argc, _In_ char** argv, _In_ PINPUT_INT ints, _In_ INT intsCount, _Inout_ CmdParams* Params);
+int parseIOnts(_In_ int argc, _In_ char** argv, _In_ PIOPUT_INT Data, _In_ INT Count, _Inout_ PVOID* Buffer, _Inout_ PULONG BufferSize);
 INT parseSe(_In_ INT argc, _In_reads_(argc) CHAR** argv, _Inout_ PSE Se, _In_ PINT Ids, _In_ INT IdsCount);
 
-BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params);
+INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params);
 BOOL checkArgs(_In_ CmdParams* Params);
 void printArgs(_In_ PCmdParams Params);
 
@@ -117,16 +122,17 @@ int _cdecl main(int argc, char** argv)
         return 0;
     }
 
-    if ( !parseArgs(argc, argv, &params) )
+    s = parseArgs(argc, argv, &params);
+    if ( s != 0 )
     {
         printUsage();
-        return -2;
+        return s;
     }
 
     if ( !checkArgs(&params) )
     {
         printUsage();
-        return -1;
+        return ERROR_INVALID_PARAMETER;
     }
 
     if ( params.Flags.Verbose )
@@ -137,7 +143,7 @@ int _cdecl main(int argc, char** argv)
     if ( params.Se.Count)
     {
         s = setPrivileges(params.Se.List, params.Se.Count, TRUE);
-        if ( !NT_SUCCESS(s) )
+        if ( s != 0 )
         {
             EPrint("Requested privileges could not be assigned! (0x%x)\n", s);
             params.Se.Count = 0;
@@ -173,15 +179,17 @@ clean:
     if ( params.Se.Count )
     {
         s = setPrivileges(params.Se.List, params.Se.Count, FALSE);
-        if ( !NT_SUCCESS(s) )
+        if ( s != 0 )
         {
             EPrint("Requested privileges could not be resigned! (0x%x)\n", s);
         }
     }
-    if ( params.Se.List != NULL )
+    if ( params.Se.List )
         free(params.Se.List);
-    if ( params.InputBufferData != NULL )
+    if ( params.InputBufferData )
         free(params.InputBufferData);
+    if ( params.OutputBufferData )
+        free(params.OutputBufferData);
 
     if ( device )
         NtClose(device);
@@ -204,25 +212,19 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     {
         inputBuffer = Params->InputBufferData;
     }
-
-    if ( Params->OutputBufferSize > 0 )
+    
+    if ( Params->OutputBufferData )
     {
-        outputBuffer = malloc(Params->OutputBufferSize);
-        if ( !outputBuffer )
-        {
-            status = GetLastError();
-            printf("Error (0x%08x): outputBuffer malloc failed\n", status);
-            goto clean;
-        }
-
-        memset(outputBuffer, 0, Params->OutputBufferSize);
+        outputBuffer = Params->OutputBufferData;
     }
 
-    status = NtCreateEvent(&event,
-                           FILE_ALL_ACCESS,
-                           0,
-                           NotificationEvent,
-                           0);
+    status = NtCreateEvent(
+                &event,
+                FILE_ALL_ACCESS,
+                0,
+                NotificationEvent,
+                0
+            );
     if ( status != STATUS_SUCCESS )
     {
         EPrint("Create event failed! (0x%08x)\n", status);
@@ -241,7 +243,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
                 NULL,
                 NULL,
                 &iosb,
-                Params->IOCTL,
+                Params->IoCtl,
                 inputBuffer,
                 Params->InputBufferSize,
                 outputBuffer,
@@ -264,7 +266,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
         status = NtWaitForSingleObject(event, 0, 0);
     }
 
-    if ( !NT_SUCCESS(status) )
+    if ( status != 0 )
     {
         EPrint("DeviceIo failed! (0x%08x)\n", status);
         if ( Params->Flags.Verbose )
@@ -288,7 +290,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     bytesReturned = (ULONG)iosb.Information;
 
     printf("The driver returned 0x%x bytes:\n", bytesReturned);
-    if ( bytesReturned && bytesReturned <= Params->OutputBufferSize )
+    if ( bytesReturned && bytesReturned <= Params->OutputBufferSize && outputBuffer )
     {
         printf("-----------------------------");
         UINT32 zc = countHexChars(bytesReturned);
@@ -339,12 +341,6 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
 
 
 clean:
-    if ( !Params->InputBufferData && inputBuffer )
-        free(inputBuffer);
-
-    if ( outputBuffer )
-        free(outputBuffer);
-
     if ( event )
         NtClose(event);
 
@@ -361,6 +357,19 @@ clean:
         __s__ = GetExceptionCode(); \
         printf("[X] Exception parsing input number! (0x%x)\n", __s__); \
         break; \
+    } \
+}
+
+#define STR_TO_ULONG_CLN(__out__, __val__, __s__) \
+{ \
+    __try { \
+        __out__ = (ULONG)strtoul(__val__, NULL, 0); \
+    } \
+    __except ( EXCEPTION_EXECUTE_HANDLER ) \
+    { \
+        __s__ = GetExceptionCode(); \
+        printf("[X] Exception parsing input number! (0x%x)\n", __s__); \
+        goto clean; \
     } \
 }
 
@@ -387,6 +396,16 @@ clean:
     } \
 }
 
+#define CONTINUE_IF_OD_SET(__od__, __i__) \
+{ \
+    if ( __od__ ) \
+    { \
+        printf("[i] OutputData already set! Skipping!\n"); \
+        __i__++; \
+        continue; \
+    } \
+}
+
 #define CONTINUE_IF_MAX_INT_COUNT(__cnt__, __i__) \
 { \
     if ( __cnt__ >= MAX_INTS ) \
@@ -397,26 +416,327 @@ clean:
     } \
 }
 
-BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
+#define CONTINUE_IF_MAX_ONT_COUNT(__cnt__, __i__) \
+{ \
+    if ( __cnt__ >= MAX_ONTS ) \
+    { \
+        DPrint("[i] Maximum number of output integers reached!\n Skipping!\n"); \
+        __i__++; \
+        continue; \
+    } \
+}
+
+INT parseStringA(_In_ PCHAR Value, _Out_ PVOID *Buffer, _Out_ PULONG Size)
+{
+    INT s = 0;
+
+    PVOID buffer = NULL;
+    ULONG cch = (ULONG)strlen(Value);
+    ULONG cb = cch;
+    ULONG size = cb + 1;
+    
+    *Buffer = NULL;
+    *Size = 0;
+
+    buffer = malloc(size);
+    if ( !buffer )
+    {
+        s = ERROR_NO_SYSTEM_RESOURCES;
+        EPrint("No memory for data!\n");
+        goto clean;
+    }
+    memcpy(buffer, Value, size);
+
+    *Buffer = buffer;
+    *Size = size;
+
+clean:
+    return s;
+}
+
+INT parseStringU(_In_ PCHAR Value, _Out_ PVOID *Buffer, _Out_ PULONG Size)
+{
+    INT s = 0;
+
+    PVOID buffer = NULL;
+    ULONG cch = (ULONG)strlen(Value);
+    ULONG cb = cch * 2;
+    ULONG size = cb + 2;
+    
+    *Buffer = NULL;
+    *Size = 0;
+
+    buffer = malloc(size);
+    if ( !buffer )
+    {
+        s = ERROR_NO_SYSTEM_RESOURCES;
+        EPrint("No memory for data!\n");
+        goto clean;
+    }
+    StringCchPrintfW((PWCHAR)buffer, cch+1, L"%hs", Value);
+
+    *Buffer = buffer;
+    *Size = size;
+
+clean:
+    return s;
+}
+
+INT parseFile(_In_ PCHAR FilePath, _Out_ PVOID *Buffer, _Out_ PULONG Size)
+{
+    INT s = 0;
+    BOOL b = FALSE;
+    
+    PWCHAR ntPath = NULL;
+    HANDLE file = NULL;
+
+    WCHAR filePathW[MAX_PATH];
+    ULONG cch = 0;
+    ULONG cb = 0;
+
+    PVOID buffer = NULL;
+    ULONG size = 0;
+
+    *Buffer = NULL;
+    *Size = 0;
+
+    StringCchPrintfW(filePathW, MAX_PATH, L"%hs", FilePath);
+    cch = GetFullPathNameW(filePathW, 0, NULL, NULL);
+    if ( cch == 0 )
+    {
+        s = GetLastError();
+        EPrint("Getting full path failed! (0x%x)\n", s);
+        goto clean;
+    }
+    cch += 4; // nt prefix
+    cb = cch * 2;
+    ntPath = (PWCHAR)malloc(cb);
+    if ( !ntPath )
+    {
+        s = ERROR_NO_SYSTEM_RESOURCES;
+        EPrint("No memory for path!\n");
+        goto clean;
+    }
+    cch = GetFullPathNameW(filePathW, cch-4, &ntPath[4], NULL);
+    if ( cch == 0 )
+    {
+        s = GetLastError();
+        EPrint("Getting full path failed! (0x%x)\n", s);
+        goto clean;
+    }
+    *(PUINT64)ntPath = NT_PATH_PREFIX_W;
+
+    s = openFile(&file, ntPath, FILE_GENERIC_READ, FILE_SHARE_READ);
+    if ( s != 0 )
+    {
+        goto clean;
+    }
+
+    LARGE_INTEGER fileSize = {0};
+    b = GetFileSizeEx(file, &fileSize);
+    if ( !b || !fileSize.QuadPart )
+    {
+        s = GetLastError();
+        EPrint("Getting file size failed! (0x%x)\n", s);
+        goto clean;
+    }
+    if ( fileSize.HighPart )
+    {
+        s = ERROR_INVALID_PARAMETER;
+        EPrint("File too big! (0x%x)\n", s);
+        goto clean;
+    }
+
+    buffer = malloc(fileSize.LowPart);
+    if ( !buffer )
+    {
+        s = ERROR_NO_SYSTEM_RESOURCES;
+        EPrint("No memory for file data!\n");
+        goto clean;
+    }
+    size = fileSize.LowPart;
+            
+    IO_STATUS_BLOCK iosb;
+    RtlZeroMemory(&iosb, sizeof(iosb));
+            
+    s = NtReadFile(file, NULL, NULL, NULL, &iosb, buffer, size, NULL, NULL);
+    if ( s != 0 ) 
+    {
+        EPrint("Reading file data failed! (0x%x)\n", s);
+        goto clean;
+    }
+    size = (ULONG) iosb.Information;
+    
+    *Buffer = buffer;
+    *Size = size;
+
+clean:
+    if ( s != 0 )
+        free(buffer);
+
+    if ( ntPath )
+        free(ntPath);
+    if ( file )
+        NtClose(file);
+
+    return s;
+}
+
+INT parseRandom(_In_ PCHAR SizeStr, _Out_ PVOID *Buffer, _Out_ PULONG BufferSize)
+{
+    INT s = 0;
+                
+    PVOID buffer = NULL;
+    ULONG size = 0;
+
+    *Buffer = NULL;
+    *BufferSize = 0;
+
+    STR_TO_ULONG_CLN(size, SizeStr, s);
+    buffer = malloc(size);
+    if ( !buffer )
+    {
+        s = ERROR_NO_SYSTEM_RESOURCES;
+        EPrint("No memory for random data!\n");
+        goto clean;
+    }
+
+    s = genRand(buffer, size);
+    if ( s != 0 )
+    {
+        EPrint("Generating random failed!\n");
+        goto clean;
+    }
+    
+    *Buffer = buffer;
+    *BufferSize = size;
+
+clean:
+    if ( s != 0 )
+        free(buffer);
+
+    return s;
+}
+
+INT parsePattern(_In_ PCHAR SizeStr, _Out_ PVOID *Buffer, _Out_ PULONG BufferSize)
+{
+    INT s = 0;
+    
+    PVOID buffer = NULL;
+    ULONG size = 0;
+
+    *Buffer = NULL;
+    *BufferSize = 0;
+
+    STR_TO_ULONG_CLN(size, SizeStr, s);
+    buffer = malloc(size);
+    if ( !buffer )
+    {
+        s = ERROR_NO_SYSTEM_RESOURCES;
+        EPrint("No memory for pattern data!\n");
+        goto clean;
+    }
+
+    s = genPattern(buffer, size);
+    if ( s != 0 )
+    {
+        EPrint("Generating pattern failed!\n");
+        goto clean;
+    }
+    
+    *Buffer = buffer;
+    *BufferSize = size;
+
+clean:
+    if ( s != 0 )
+        free(buffer);
+
+    return s;
+}
+
+INT parseCustomPattern(_In_ PCHAR Pattern, _In_ PCHAR PatternSizeStr, _Out_ PVOID *Buffer, _Out_ PULONG BufferSize)
+{
+    INT s = 0;
+                
+    UINT64 patternStart = 0;
+    PUINT8 patternStartPtr = (PUINT8)&patternStart;
+    ULONG patternCb = 0;
+
+    PVOID buffer = NULL;
+    ULONG bufferSize = 0;
+
+    *Buffer = NULL;
+    *BufferSize = 0;
+
+    s = parsePlainBytes(Pattern, &patternStartPtr, &patternCb, 8);
+    if ( s != 0 )
+    {
+        goto clean;
+    }
+
+    bufferSize = (ULONG)strtoul(PatternSizeStr, NULL, 0);
+    buffer = malloc(bufferSize);
+    if ( !buffer )
+    {
+        s = ERROR_NO_SYSTEM_RESOURCES;
+        EPrint("No memory for pattern data!\n");
+        goto clean;
+    }
+
+    s = genCustomPattern(patternStart, patternCb, buffer, bufferSize);
+    if ( s != 0 )
+    {
+        EPrint("Generating pattern failed!\n");
+        goto clean;
+    }
+    
+    *Buffer = buffer;
+    *BufferSize = bufferSize;
+
+clean:
+    if ( s != 0 )
+        free(buffer);
+
+    return s;
+}
+
+FORCEINLINE
+INT parseIOBSize(_Inout_ PVOID* Buffer, _In_ ULONG BufferSize, _In_ UINT8 FillValue)
+{
+    INT s = 0;
+
+    if ( BufferSize > 0 && !(*Buffer) )
+    {
+        (*Buffer) = malloc(BufferSize);
+        if ( !(*Buffer) )
+        {
+            s = ERROR_NO_SYSTEM_RESOURCES;
+            EPrint("Buffer malloc failed! (0x%x)\n", s);
+            goto clean;
+        }
+        memset((*Buffer), FillValue, BufferSize);
+    }
+
+clean:
+    return s;
+}
+
+INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
 {
     INT start_i = 1;
     INT last_i = argc;
     INT i;
     INT s = 0;
-    BOOL b;
 
     char* arg = NULL;
     char *val1 = NULL;
     char *val2 = NULL;
     
-    ULONG cb;
-    ULONG cch;
-
-    PWCHAR ntPath = NULL;
-    HANDLE file = NULL;
-
     INT intCount = 0;
     INPUT_INT ints[MAX_INTS] = { 0 };
+
+    INT ontCount = 0;
+    INPUT_INT onts[MAX_ONTS] = { 0 };
 
     INT seId[MAX_SE_COUNT] = {0};
     INT seIdCount = 0;
@@ -441,25 +761,20 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             Params->DeviceName = val1;
             i++;
         }
-        else if ( IS_2C_ARG(arg, 'os') )
-        {
-            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No output length set!\n");
-
-            STR_TO_ULONG(Params->OutputBufferSize, val1, s);
-
-            i++;
-        }
         else if ( IS_1C_ARG(arg, 'c') )
         {
             BREAK_ON_NOT_A_VALUE(val1, s, "[e] No ioctl code set!\n");
   
-            STR_TO_ULONG_X(Params->IOCTL, val1, s);
+            STR_TO_ULONG_X(Params->IoCtl, val1, s);
 
             i++;
         }
+        //
+        // input buffer filling
+        //
         else if ( IS_2C_ARG(arg, 'ix') || IS_2C_ARG(arg, 'ih') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No hex data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No hex given!\n");
 
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
@@ -473,7 +788,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'ib') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No byte data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No byte given!\n");
 
             //CONTINUE_IF_ID_SET(Params->InputBufferData, i);
             CONTINUE_IF_MAX_INT_COUNT(intCount, i);
@@ -488,7 +803,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'iw') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No word data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No word given!\n");
 
             //CONTINUE_IF_ID_SET(Params->InputBufferData, i);
             CONTINUE_IF_MAX_INT_COUNT(intCount, i);
@@ -501,7 +816,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'id') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No dword data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No dword given!\n");
             
             CONTINUE_IF_MAX_INT_COUNT(intCount, i);
             //CONTINUE_IF_ID_SET(Params->InputBufferData, i);
@@ -514,7 +829,7 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'iq') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No qword data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No qword given!\n");
             
             CONTINUE_IF_MAX_INT_COUNT(intCount, i);
             //CONTINUE_IF_ID_SET(Params->InputBufferData, i);
@@ -527,120 +842,37 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'ia') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No ascii string data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No ascii string given!\n");
 
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
-
-            cch = (ULONG)strlen(val1);
-            cb = cch;
-            Params->InputBufferSize = cb + 1;
-            Params->InputBufferData = malloc(Params->InputBufferSize);
-            if ( !Params->InputBufferData )
-            {
-                s = ERROR_NOT_ENOUGH_MEMORY;
-                EPrint("No memory for input data!\n");
-                Params->InputBufferSize = 0;
+            
+            s = parseStringA(val1, &Params->InputBufferData, &Params->InputBufferSize);
+            if ( s != 0 )
                 break;
-            }
-            memcpy(Params->InputBufferData, val1, Params->InputBufferSize);
 
             i++;
         }
         else if ( IS_2C_ARG(arg, 'iu') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No unicode string data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No unicode string given!\n");
 
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
-
-            cch = (ULONG)strlen(val1);
-            cb = cch * 2;
-            Params->InputBufferSize = cb + 2;
-            Params->InputBufferData = malloc(Params->InputBufferSize);
-            if ( !Params->InputBufferData )
-            {
-                s = ERROR_NOT_ENOUGH_MEMORY;
-                EPrint("No memory for input data!\n");
-                Params->InputBufferSize = 0;
+            
+            s = parseStringU(val1, &Params->InputBufferData, &Params->InputBufferSize);
+            if ( s != 0 )
                 break;
-            }
-            StringCchPrintfW((PWCHAR)Params->InputBufferData, cch+1, L"%hs", val1);
 
             i++;
         }
         else if ( IS_2C_ARG(arg, 'if') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No file data set!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No file given!\n");
 
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
-            WCHAR val1W[MAX_PATH];
-            StringCchPrintfW(val1W, MAX_PATH, L"%hs", val1);
-            cch = GetFullPathNameW(val1W, 0, NULL, NULL);
-            if ( cch == 0 )
-            {
-                s = GetLastError();
-                EPrint("Getting full path failed! (0x%x)\n", s);
-                break;
-            }
-            cch += 4; // nt prefix
-            cb = cch * 2;
-            ntPath = (PWCHAR)malloc(cb);
-            if ( !ntPath )
-            {
-                s = ERROR_NOT_ENOUGH_MEMORY;
-                EPrint("No memory for path!\n");
-                break;
-            }
-            cch = GetFullPathNameW(val1W, cch-4, &ntPath[4], NULL);
-            if ( cch == 0 )
-            {
-                s = GetLastError();
-                EPrint("Getting full path failed! (0x%x)\n", s);
-                break;
-            }
-            *(PUINT64)ntPath = NT_PATH_PREFIX_W;
-
-            s = openFile(&file, ntPath, FILE_GENERIC_READ, FILE_SHARE_READ);
+            s = parseFile(val1, &Params->InputBufferData, &Params->InputBufferSize);
             if ( s != 0 )
-            {
                 break;
-            }
-
-            LARGE_INTEGER fileSize = {0};
-            b = GetFileSizeEx(file, &fileSize);
-            if ( !b || !fileSize.QuadPart )
-            {
-                s = GetLastError();
-                EPrint("Getting file size failed! (0x%x)\n", s);
-                break;
-            }
-            if ( fileSize.QuadPart > MAXUINT32 )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                EPrint("File too big! (0x%x)\n", s);
-                break;
-            }
-
-            Params->InputBufferData = malloc(fileSize.LowPart);
-            if ( !Params->InputBufferData )
-            {
-                s = ERROR_NOT_ENOUGH_MEMORY;
-                EPrint("No memory for input data!\n");
-                break;
-            }
-            Params->InputBufferSize = fileSize.LowPart;
-            
-            IO_STATUS_BLOCK iosb;
-            RtlZeroMemory(&iosb, sizeof(iosb));
-            
-            s = NtReadFile(file, NULL, NULL, NULL, &iosb, Params->InputBufferData, Params->InputBufferSize, NULL, NULL);
-            if ( s != 0 ) 
-            {
-                EPrint("Reading input data failed! (0x%x)\n", s);
-                break;
-            }
-            if ( NT_SUCCESS(iosb.Status) )
-                Params->InputBufferSize = (ULONG) iosb.Information;
 
             i++;
         }
@@ -649,23 +881,10 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             BREAK_ON_NOT_A_VALUE(val1, s, "[e] No random length set!\n");
 
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
-
-            STR_TO_ULONG(Params->InputBufferSize, val1, s);
-            Params->InputBufferData = malloc(Params->InputBufferSize);
-            if ( !Params->InputBufferData )
-            {
-                s = ERROR_NOT_ENOUGH_MEMORY;
-                EPrint("No memory for input data!\n");
-                Params->InputBufferSize = 0;
-                break;
-            }
-
-            s = genRand(Params->InputBufferData, Params->InputBufferSize);
+            
+            s = parseRandom(val1, &Params->InputBufferData, &Params->InputBufferSize);
             if ( s != 0 )
-            {
-                EPrint("Generating random failed!\n");
                 break;
-            }
 
             i++;
         }
@@ -674,23 +893,10 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             BREAK_ON_NOT_A_VALUE(val1, s, "[e] No pattern length set!\n");
 
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
-
-            STR_TO_ULONG(Params->InputBufferSize, val1, s);
-            Params->InputBufferData = malloc(Params->InputBufferSize);
-            if ( !Params->InputBufferData )
-            {
-                s = ERROR_NOT_ENOUGH_MEMORY;
-                EPrint("No memory for input data!\n");
-                Params->InputBufferSize = 0;
-                break;
-            }
-
-            s = genPattern(Params->InputBufferData, Params->InputBufferSize);
+            
+            s = parsePattern(val1, &Params->InputBufferData, &Params->InputBufferSize);
             if ( s != 0 )
-            {
-                EPrint("Generating pattern failed!\n");
                 break;
-            }
 
             i++;
         }
@@ -703,34 +909,11 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
-            UINT64 patternStart = 0;
-            PUINT8 patternStartPtr = (PUINT8)&patternStart;
-            ULONG patternSize = 0;
-            s = parsePlainBytes(val1, &patternStartPtr, &patternSize, 8);
+            s = parseCustomPattern(val1, val2, &Params->InputBufferData, &Params->InputBufferSize);
             if ( s != 0 )
-            {
                 break;
-            }
 
-            STR_TO_ULONG(Params->InputBufferSize, val2, s);
-            Params->InputBufferData = malloc(Params->InputBufferSize);
-            if ( !Params->InputBufferData )
-            {
-                s = ERROR_NOT_ENOUGH_MEMORY;
-                EPrint("No memory for input data!\n");
-                Params->InputBufferSize = 0;
-                break;
-            }
-
-            s = genCustomPattern(patternStart, patternSize, Params->InputBufferData, Params->InputBufferSize);
-            if ( s != 0 )
-            {
-                EPrint("Generating pattern failed!\n");
-                break;
-            }
-
-            i++;
-            i++;
+            i += 2;
         }
         else if ( IS_2C_ARG(arg, 'is') )
         {
@@ -742,6 +925,162 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
 
             i++;
         }
+        //
+        // output buffer filling
+        //
+        else if ( IS_2C_ARG(arg, 'ox') || IS_2C_ARG(arg, 'oh') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No hex given!\n");
+
+            CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
+
+            s = parsePlainBytes(val1, &Params->OutputBufferData, &Params->OutputBufferSize, MAXUINT32);
+            if ( s != 0 )
+            {
+                break;
+            }
+            
+            i++;
+        }
+        else if ( IS_2C_ARG(arg, 'ob') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No byte given!\n");
+
+            //CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
+            CONTINUE_IF_MAX_ONT_COUNT(ontCount, i);
+
+            onts[ontCount].Id = i+1;
+            onts[ontCount].Size = 1;
+            ontCount++;
+            
+            i++;
+        }
+        else if ( IS_2C_ARG(arg, 'ow') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No word given!\n");
+
+            //CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
+            CONTINUE_IF_MAX_ONT_COUNT(ontCount, i);
+            
+            onts[ontCount].Id = i+1;
+            onts[ontCount].Size = 2;
+            ontCount++;
+
+            i++;
+        }
+        else if ( IS_2C_ARG(arg, 'od') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No dword given!\n");
+            
+            CONTINUE_IF_MAX_ONT_COUNT(ontCount, i);
+            //CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
+
+            onts[ontCount].Id = i+1;
+            onts[ontCount].Size = 4;
+            ontCount++;
+
+            i++;
+        }
+        else if ( IS_2C_ARG(arg, 'oq') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No qword given!\n");
+            
+            CONTINUE_IF_MAX_ONT_COUNT(ontCount, i);
+            //CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
+
+            onts[ontCount].Id = i+1;
+            onts[ontCount].Size = 8;
+            ontCount++;
+
+            i++;
+        }
+        else if ( IS_2C_ARG(arg, 'oa') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No ascii string given!\n");
+
+            CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
+
+            s = parseStringA(val1, &Params->OutputBufferData, &Params->OutputBufferSize);
+            if ( s != 0 )
+                break;
+
+            i++;
+        }
+        else if ( IS_2C_ARG(arg, 'ou') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No unicode string given!\n");
+
+            CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
+            
+            s = parseStringU(val1, &Params->OutputBufferData, &Params->OutputBufferSize);
+            if ( s != 0 )
+                break;
+
+            i++;
+        }
+        else if ( IS_2C_ARG(arg, 'of') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No file given!\n");
+
+            CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
+
+            s = parseFile(val1, &Params->OutputBufferData, &Params->OutputBufferSize);
+            if ( s != 0 )
+                break;
+
+            i++;
+        }
+        else if ( IS_2C_ARG(arg, 'or') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No random length set!\n");
+
+            CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
+            
+            s = parseRandom(val1, &Params->OutputBufferData, &Params->OutputBufferSize);
+            if ( s != 0 )
+                break;
+
+            i++;
+        }
+        else if ( IS_2C_ARG(arg, 'op') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No pattern length set!\n");
+
+            CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
+            
+            s = parsePattern(val1, &Params->OutputBufferData, &Params->OutputBufferSize);
+            if ( s != 0 )
+                break;
+            i++;
+        }
+        else if ( IS_3C_ARG(arg, 'opc') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No pattern start value set!\n");
+            
+            val2 = GET_ARG_VALUE(argc, argv, i, 2);
+            BREAK_ON_NOT_A_VALUE(val2, s, "[e] No pattern length set!\n");
+            
+            CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
+            
+            s = parseCustomPattern(val1, val2, &Params->OutputBufferData, &Params->OutputBufferSize);
+            if ( s != 0 )
+                break;
+
+            i += 2;
+        }
+        else if ( IS_2C_ARG(arg, 'os') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No output length set!\n");
+
+            CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
+
+            STR_TO_ULONG(Params->OutputBufferSize, val1, s);
+
+            i++;
+        }
+        //
+        // other stuff
+        //
         else if ( IS_2C_ARG(arg, 'da') )
         {
             BREAK_ON_NOT_A_VALUE(val1, s, "[e] No desired access flag set!\n");
@@ -836,7 +1175,13 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         goto clean;
     }
     
-    s = parseInts(argc, argv, ints, intCount, Params);
+    s = parseIOnts(argc, argv, ints, intCount, &Params->InputBufferData, &Params->InputBufferSize);
+    if ( s != 0 )
+    {
+        goto clean;
+    }
+    
+    s = parseIOnts(argc, argv, onts, ontCount, &Params->OutputBufferData, &Params->OutputBufferSize);
     if ( s != 0 )
     {
         goto clean;
@@ -849,98 +1194,113 @@ BOOL parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
     }
 
     // fill input with a fill value, if just /is has been set
-    if ( Params->InputBufferSize > 0 && !Params->InputBufferData )
-    {
-        Params->InputBufferData = malloc(Params->InputBufferSize);
-        if ( !Params->InputBufferData )
-        {
-            s = GetLastError();
-            printf("Error (0x%08x): inputBuffer malloc failed\n", s);
-            goto clean;
-        }
-        memset(Params->InputBufferData, Params->FillValue, Params->InputBufferSize);
-    }
+    s = parseIOBSize(&Params->InputBufferData, Params->InputBufferSize, Params->FillValue);
+    if ( s != 0 )
+        goto clean;
+
+    // fill output with a 0, if just /os has been set
+    s = parseIOBSize(&Params->OutputBufferData, Params->OutputBufferSize, 0);
+    if ( s != 0 )
+        goto clean;
 
 clean:
-    if ( ntPath )
-        free(ntPath);
-    if ( file )
-        NtClose(file);
 
-    return s==0;
+    return s;
 }
 
 // parse input ints to an input "struct"
-int parseInts(_In_ int argc, _In_ char** argv, _In_ PINPUT_INT ints, _In_ INT intsCount, _Inout_ CmdParams* Params)
+int parseIOnts(
+    _In_ int argc, 
+    _In_ char** argv, 
+    _In_ PIOPUT_INT Data, 
+    _In_ INT Count, 
+    _Inout_ PVOID* Buffer,
+    _Inout_ PULONG BufferSize
+)
 {
     int s = 0;
     INT i;
+                
+    PVOID buffer = NULL;
+    ULONG size = 0;
 
-    // max is MAX_INTS * 8 = 0x80
-    UINT32 neededSize = 0;
-
-    if ( !intsCount )
+    if ( !Count )
         return 0;
 
-    if ( Params->InputBufferData )
+    if ( *Buffer )
     {
-        printf("[i] InputData already set! Skipping!\n");
+        printf("[i] Data already set! Skipping!\n");
         return 0;
     }
 
     // get needed size
-    for ( i = 0; i < intsCount; i++ )
+    // max is MAX_INTS * 8 = 0x80
+    for ( i = 0; i < Count; i++ )
     {
-        neededSize += ints[i].Size;
+        size += Data[i].Size;
     }
 
     // allocate buffer
-    Params->InputBufferSize = neededSize;
-    Params->InputBufferData = malloc(Params->InputBufferSize);
-    if ( !Params->InputBufferData )
+    buffer = malloc(size);
+    if ( !buffer )
     {
-        s = GetLastError();
-        EPrint("inputBuffer malloc failed! (0x%x)\n", s);
+        s = ERROR_NO_SYSTEM_RESOURCES;
+        EPrint("No memory for data! (0x%x)\n", s);
         goto clean;
     }
 
     // fill buffer
-    PUINT8 ptr = Params->InputBufferData;
-    for ( i = 0; i < intsCount; i++ )
+    
+    __try
     {
-        // should not happen
-        if ( ints[i].Id >= argc )
+        PUINT8 ptr = buffer;
+        for ( i = 0; i < Count; i++ )
         {
-            s = ERROR_INVALID_PARAMETER;
-            EPrint("Invalid int id! (0x%x)\n", s);
-            goto clean;
-        }
-
-        switch ( ints[i].Size )
-        {
-            case 1:
-                *(PUINT8)ptr = (UINT8)strtoul(argv[ints[i].Id], NULL, 0);
-                ptr++;
-                break;
-            case 2:
-                *(PUINT16)ptr = (UINT16)strtoul(argv[ints[i].Id], NULL, 0);
-                ptr+=2;
-                break;
-            case 4:
-                *(PUINT32)ptr = (UINT32)strtoul(argv[ints[i].Id], NULL, 0);
-                ptr+=4;
-                break;
-            case 8:
-                *(PUINT64)ptr = (UINT64)strtoull(argv[ints[i].Id], NULL, 0);
-                ptr+=8;
-                break;
-            default:
+            // should not happen
+            if ( Data[i].Id >= argc )
+            {
                 s = ERROR_INVALID_PARAMETER;
+                EPrint("Invalid int id! (0x%x)\n", s);
                 goto clean;
+            }
+
+            switch ( Data[i].Size )
+            {
+                case 1:
+                    *(PUINT8)ptr = (UINT8)strtoul(argv[Data[i].Id], NULL, 0);
+                    ptr++;
+                    break;
+                case 2:
+                    *(PUINT16)ptr = (UINT16)strtoul(argv[Data[i].Id], NULL, 0);
+                    ptr+=2;
+                    break;
+                case 4:
+                    *(PUINT32)ptr = (UINT32)strtoul(argv[Data[i].Id], NULL, 0);
+                    ptr+=4;
+                    break;
+                case 8:
+                    *(PUINT64)ptr = (UINT64)strtoull(argv[Data[i].Id], NULL, 0);
+                    ptr+=8;
+                    break;
+                default:
+                    s = ERROR_INVALID_PARAMETER;
+                    goto clean;
+            }
         }
     }
+    __except ( EXCEPTION_EXECUTE_HANDLER )
+    {
+        s = GetExceptionCode();
+        printf("[X] Exception parsing input number! (0x%x)\n", s);
+        goto clean;
+    }
+
+    *Buffer = buffer;
+    *BufferSize = size;
 
 clean:
+    if ( s != 0 )
+        free(buffer);
 
     return s;
 }
@@ -1077,7 +1437,7 @@ int openFile(
                 NULL, 
                 0
             );
-    if ( !NT_SUCCESS(status) )
+    if ( status != 0 )
     {
         EPrint("Open file failed! (0x%x) [%s].\n", status, getStatusString(status));
         return status;
@@ -1241,7 +1601,7 @@ void printArgs(_In_ PCmdParams Params)
 {
     printf("Params:\n");
     printf(" - DeviceName: %s\n", Params->DeviceName);
-    printf(" - IOCTL: 0x%x\n", Params->IOCTL);
+    printf(" - IOCTL: 0x%x\n", Params->IoCtl);
     printf(" - InputBufferSize: 0x%x\n", Params->InputBufferSize);
     if ( Params->InputBufferData )
     {
@@ -1249,6 +1609,11 @@ void printArgs(_In_ PCmdParams Params)
         PrintMemBytes(Params->InputBufferData, Params->InputBufferSize);
     }
     printf(" - OutputBufferSize: 0x%x\n", Params->OutputBufferSize);
+    if ( Params->OutputBufferData )
+    {
+        printf(" - OutputBufferData:\n");
+        PrintMemBytes(Params->OutputBufferData, Params->OutputBufferSize);
+    }
     printf(" - Sleep: 0x%x\n", Params->Sleep);
     printf(" - TestHandle: %d\n", Params->TestHandle);
     printf(" - DesiredAccess: 0x%x\n", Params->DesiredAccess);
@@ -1269,11 +1634,10 @@ void printUsage()
     printf("Usage: %s "
            "/n <DeviceName> "
            "[/c <ioctl>] "
-           "[/os <size>] "
-           "[/is|/ir|/ip <size>] "
-           "[/ipc <pattern> <size>] "
-           "[/i(x|b|w|d|q|a|u) <data>] "
-           "[/if <file>] "
+           "[/is|/ir|/ip|/os|/or|/op <size>] "
+           "[/ipc|/opc <pattern> <size>] "
+           "[/i|o(x|b|w|d|q|a|u) <data>] "
+           "[/if|/of <file>] "
            "[/s <sleep>] "
            "[/da <flags>] "
            "[/sa <flags>] "
@@ -1295,8 +1659,8 @@ void printHelp()
     printf("Options:\n");
     printf(" - /n DeviceName to call. I.e. \"\\Device\\Beep\"\n");
     printf(" - /c The desired IOCTL in hex.\n");
-    printf(" - /os Size of OutputBuffer.\n");
     printf(" - Input Data:\n");
+    printf("    (The integer types are chainable.)\n");
     printf("    * /ix <Data> as hex byte string.\n");
     printf("    * /ib <Data> as byte.\n");
     printf("    * /iw <Data> as word (uint16).\n");
@@ -1309,6 +1673,21 @@ void printHelp()
     printf("    * /ip Input data will be filled with <size> default pattern bytes (Aa0Aa1...).\n");
     printf("    * /ipc Input data will be filled with <size> custom pattern bytes, starting from <pattern>, incremented by 1.\n");
     printf("    * /is Input data will be filled with <size> 'A's.\n");
+    printf(" - Output Data:\n");
+    printf("    (Sometimes the output buffer might need to be filled as well.)\n");
+    printf("    (The integer types are chainable.)\n");
+    printf("    * /os Size of OutputBuffer to be filled with zeros. (Most common option.)\n");
+    printf("    * /ox <Data> as hex byte string.\n");
+    printf("    * /ob <Data> as byte.\n");
+    printf("    * /ow <Data> as word (uint16).\n");
+    printf("    * /od <Data> as dword (uint32).\n");
+    printf("    * /oq <Data> as qword (uint64).\n");
+    printf("    * /oa <Data> as ascii text.\n");
+    printf("    * /ou <Data> as unicode (utf-16) text.\n");
+    printf("    * /of Input data is read as binary data from the file <path>.\n");
+    printf("    * /or Input data will be filled with <size> random bytes.\n");
+    printf("    * /op Input data will be filled with <size> default pattern bytes (Aa0Aa1...).\n");
+    printf("    * /opc Input data will be filled with <size> custom pattern bytes, starting from <pattern>, incremented by 1.\n");
     printf(" - /s Duration of a possible sleep after device io.\n");
     printf(" - /t Just test the device for accessibility. Don't send data.\n");
     printf(" - /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x%x.\n", (FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE));
@@ -1327,6 +1706,7 @@ void printHelp()
     printf(" - /v More verbose output.\n");
     printf("\n");
     printf("Example:\n");
+    printf("$ Talk.exe /n \\Device\\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e\n");
     printf("$ Talk.exe /n \\Device\\Beep /c 0x10000 /id 0x202 /id 0x83e /s 0x083e\n");
     printf("$ Talk.exe /n \\Device\\HarddiskVolume1 /c 0x4d0008 /os 0x100 /pu\n");
 }

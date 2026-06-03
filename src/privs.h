@@ -1,4 +1,4 @@
-#pragma
+#pragma once
 
 NTSTATUS setPrivileges(
     _In_ ULONG *Privileges,
@@ -10,6 +10,13 @@ NTSTATUS setPrivileges(
     NTSTATUS status = 0;
     HANDLE token = NULL;
     LUID luid;
+    
+    if ( !Privileges || !PrivilegesCount )
+    {
+        status = STATUS_INVALID_PARAMETER;
+        EPrint("No privileges to set! (0x%x)\n", status);
+        return status;
+    }
 
     status = NtOpenProcessToken(
         NtCurrentProcess(),

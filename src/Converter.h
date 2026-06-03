@@ -5,7 +5,7 @@
 
 
 
-int parseUint8(const char* arg, UINT8* value, UINT8 base);
+//int parseUint8(const char* arg, UINT8* value, UINT8 base);
 int parseUint64(const char* arg, ULONGLONG* value, UINT8 base);
 
 #define uint16_t UINT16
@@ -138,20 +138,20 @@ INT parsePlainBytes(
     return s;
 }
 
-int parseUint8(const char* arg, UINT8* value, UINT8 base)
-{
-    ULONGLONG result;
-    int s = parseUint64(arg, &result, base);
-    if ( s != 0 ) return s;
-    if ( s > (UINT8)-1 )
-    {
-        fprintf(stderr, "Error: %s could not be converted to a byte: Out of range!\n", arg);
-        return 5;
-    }
-
-    *value = (UINT8) result;
-    return 0;
-}
+//int parseUint8(const char* arg, UINT8* value, UINT8 base)
+//{
+//    ULONGLONG result;
+//    int s = parseUint64(arg, &result, base);
+//    if ( s != 0 ) return s;
+//    if ( result > (UINT8)-1 )
+//    {
+//        fprintf(stderr, "Error: %s could not be converted to a byte: Out of range!\n", arg);
+//        return 5;
+//    }
+//
+//    *value = (UINT8) result;
+//    return 0;
+//}
 
 int parseUint64(const char* arg, ULONGLONG* value, UINT8 base)
 {

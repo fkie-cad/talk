@@ -17,11 +17,11 @@ set /a release=0
 set /a bitness=64
 set /a debug_print=EP_FLAG
 set /a pdb=0
-set /a rtl=0
+set /a static=0
 set platform=x64
 set configuration=Debug
 
-set pts=v143
+set pts=v145
 
 set prog_proj=talk.vcxproj
 
@@ -66,7 +66,15 @@ GOTO :ParseParams
         goto reParseParams
     )
     IF /i "%~1"=="/rtl" (
-        SET /a rtl=1
+        SET /a static=1
+        goto reParseParams
+    )
+    IF /i "%~1"=="/static" (
+        SET /a static=1
+        goto reParseParams
+    )
+    IF /i "%~1"=="/s" (
+        SET /a static=1
         goto reParseParams
     )
     IF /i "%~1"=="/pts" (
@@ -129,7 +137,7 @@ GOTO :ParseParams
         echo bitness: %bitness%
         echo pdb: %pdb%
         echo dprint: %debug_print%
-        echo rtl: %rtl%
+        echo static: %static%
         echo pts: %pts%
     )
 
@@ -148,8 +156,8 @@ GOTO :ParseParams
 :build
     SETLOCAL
         set proj=%~1
-        if %debug%==1 call :buildEx %proj%,%platform%,Debug,%debug_print%,%rtl%,%pdb%,%pts%
-        if %release%==1 call :buildEx %proj%,%platform%,Release,%debug_print%,%rtl%,%pdb%,%pts%
+        if %debug%==1 call :buildEx %proj%,%platform%,Debug,%debug_print%,%static%,%pdb%,%pts%
+        if %release%==1 call :buildEx %proj%,%platform%,Release,%debug_print%,%static%,%pdb%,%pts%
     ENDLOCAL
     
     EXIT /B %ERRORLEVEL%
@@ -206,7 +214,7 @@ GOTO :ParseParams
 
 
 :usage
-    echo Usage: %my_name% [/talk] [/d] [/r] [/b 32^|64] [/pdb] [/rtl]
+    echo Usage: %my_name% [/talk] [/d] [/r] [/b 32^|64] [/pdb] [/static]
     echo Default: %my_name% [/talk /r /b 64]
     exit /B 0
     
@@ -221,7 +229,7 @@ GOTO :ParseParams
     echo /r: Build in release mode.
     echo /b: Bitness of exe. 32^|64. Default: 64.
     echo /pdb: Compile with pdbs.
-    echo /rtl: Compile with RuntimeLibrary.
+    echo /static: Statically include RuntimeLibraries.
     echo /pts: msbuild PlatformToolSet. Default: v142.
     echo.
     echo /v: More verbose mode.

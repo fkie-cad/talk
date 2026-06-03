@@ -13,11 +13,15 @@
 #include "privs.h"
 #include "helper.h"
 
+#include "fileio.h"
+#include "patterns.h"
+#include "argParse.h"
+
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.2.0"
-#define LAST_CHANGED "12.12.2025"
+#define VERSION "2.2.1"
+#define LAST_CHANGED "03.06.2026"
 
 
 #define PRINT_MODE_NONE         (0x00) // 0000
@@ -35,24 +39,12 @@
 
 #define DEFAULT_FILL_VALUE ('A')
 
-#define MAX_DEF_PATTERN_SIZE (26*26*10*3)
-
 #define MAX_SE_COUNT (0x10)
 
 #define MAX_INTS (0x10)
 #define MAX_ONTS (0x10)
-typedef struct _IOPUT_INT {
-    INT Id;
-    INT Size;
-} 
-IOPUT_INT, *PIOPUT_INT,
-INPUT_INT, *PINPUT_INT,
-OUTPUT_INT, *POUTPUT_INT;
 
-typedef struct _SE {
-    PULONG List;
-    ULONG Count;
-} SE, *PSE;
+
 
 typedef struct CmdParams {
     CHAR* DeviceName;
@@ -76,12 +68,6 @@ typedef struct CmdParams {
 
 
 
-INT genPattern(_Inout_ PVOID Buffer, _In_ ULONG Size);
-INT genCustomPattern(_In_ UINT64 PatternStart, _In_ ULONG PatternSize, _Inout_ PVOID Buffer, _In_ ULONG BufferSize);
-
-int parseIOnts(_In_ int argc, _In_ char** argv, _In_ PIOPUT_INT Data, _In_ INT Count, _Inout_ PVOID* Buffer, _Inout_ PULONG BufferSize);
-INT parseSe(_In_ INT argc, _In_reads_(argc) CHAR** argv, _Inout_ PSE Se, _In_ PINT Ids, _In_ INT IdsCount);
-
 INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params);
 BOOL checkArgs(_In_ CmdParams* Params);
 void printArgs(_In_ PCmdParams Params);
@@ -99,13 +85,6 @@ int openDevice(
 int generateIoRequest(
     _In_ HANDLE Device, 
     _In_ PCmdParams Params
-);
-
-int openFile(
-    _Out_ PHANDLE File, 
-    _In_ PWCHAR FileName, 
-    _In_ ACCESS_MASK DesiredAccess, 
-    _In_ ULONG ShareAccess
 );
 
 
@@ -126,13 +105,14 @@ int _cdecl main(int argc, char** argv)
     if ( s != 0 )
     {
         printUsage();
-        return s;
+        goto clean;
     }
 
     if ( !checkArgs(&params) )
     {
         printUsage();
-        return ERROR_INVALID_PARAMETER;
+        s = ERROR_INVALID_PARAMETER;
+        goto clean;
     }
 
     if ( params.Flags.Verbose )
@@ -151,8 +131,6 @@ int _cdecl main(int argc, char** argv)
         }
         DPrint("SE privileges assigned.\n");
     }
-
-
 
     s = openDevice(&device, params.DeviceName, params.DesiredAccess, params.ShareAccess);
     if ( s != 0 )
@@ -178,10 +156,10 @@ int _cdecl main(int argc, char** argv)
 clean:
     if ( params.Se.Count )
     {
-        s = setPrivileges(params.Se.List, params.Se.Count, FALSE);
-        if ( s != 0 )
+        NTSTATUS s2 = setPrivileges(params.Se.List, params.Se.Count, FALSE);
+        if ( s2 != 0 )
         {
-            EPrint("Requested privileges could not be resigned! (0x%x)\n", s);
+            EPrint("Requested privileges could not be resigned! (0x%x)\n", s2);
         }
     }
     if ( params.Se.List )
@@ -236,7 +214,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     RtlZeroMemory(&iosb, sizeof(iosb));
     
     printf("Launching I/O Request Packet...\n");
-
+    
     status = NtDeviceIoControlFile(
                 Device,
                 event,
@@ -264,8 +242,14 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
             printf("Waiting for event to signal.\n");
         }
         status = NtWaitForSingleObject(event, 0, 0);
+        if ( status != 0 )
+        {
+            EPrint("Wait failed! (0x%x)\n", status);
+            goto clean;
+        }
     }
 
+    status = iosb.Status;
     if ( status != 0 )
     {
         EPrint("DeviceIo failed! (0x%08x)\n", status);
@@ -360,19 +344,6 @@ clean:
     } \
 }
 
-#define STR_TO_ULONG_CLN(__out__, __val__, __s__) \
-{ \
-    __try { \
-        __out__ = (ULONG)strtoul(__val__, NULL, 0); \
-    } \
-    __except ( EXCEPTION_EXECUTE_HANDLER ) \
-    { \
-        __s__ = GetExceptionCode(); \
-        printf("[X] Exception parsing input number! (0x%x)\n", __s__); \
-        goto clean; \
-    } \
-}
-
 #define STR_TO_ULONG_X(__out__, __val__, __s__) \
 { \
     __try { \
@@ -424,301 +395,6 @@ clean:
         __i__++; \
         continue; \
     } \
-}
-
-INT parseStringA(_In_ PCHAR Value, _Out_ PVOID *Buffer, _Out_ PULONG Size)
-{
-    INT s = 0;
-
-    PVOID buffer = NULL;
-    ULONG cch = (ULONG)strlen(Value);
-    ULONG cb = cch;
-    ULONG size = cb + 1;
-    
-    *Buffer = NULL;
-    *Size = 0;
-
-    buffer = malloc(size);
-    if ( !buffer )
-    {
-        s = ERROR_NO_SYSTEM_RESOURCES;
-        EPrint("No memory for data!\n");
-        goto clean;
-    }
-    memcpy(buffer, Value, size);
-
-    *Buffer = buffer;
-    *Size = size;
-
-clean:
-    return s;
-}
-
-INT parseStringU(_In_ PCHAR Value, _Out_ PVOID *Buffer, _Out_ PULONG Size)
-{
-    INT s = 0;
-
-    PVOID buffer = NULL;
-    ULONG cch = (ULONG)strlen(Value);
-    ULONG cb = cch * 2;
-    ULONG size = cb + 2;
-    
-    *Buffer = NULL;
-    *Size = 0;
-
-    buffer = malloc(size);
-    if ( !buffer )
-    {
-        s = ERROR_NO_SYSTEM_RESOURCES;
-        EPrint("No memory for data!\n");
-        goto clean;
-    }
-    StringCchPrintfW((PWCHAR)buffer, cch+1, L"%hs", Value);
-
-    *Buffer = buffer;
-    *Size = size;
-
-clean:
-    return s;
-}
-
-INT parseFile(_In_ PCHAR FilePath, _Out_ PVOID *Buffer, _Out_ PULONG Size)
-{
-    INT s = 0;
-    BOOL b = FALSE;
-    
-    PWCHAR ntPath = NULL;
-    HANDLE file = NULL;
-
-    WCHAR filePathW[MAX_PATH];
-    ULONG cch = 0;
-    ULONG cb = 0;
-
-    PVOID buffer = NULL;
-    ULONG size = 0;
-
-    *Buffer = NULL;
-    *Size = 0;
-
-    StringCchPrintfW(filePathW, MAX_PATH, L"%hs", FilePath);
-    cch = GetFullPathNameW(filePathW, 0, NULL, NULL);
-    if ( cch == 0 )
-    {
-        s = GetLastError();
-        EPrint("Getting full path failed! (0x%x)\n", s);
-        goto clean;
-    }
-    cch += 4; // nt prefix
-    cb = cch * 2;
-    ntPath = (PWCHAR)malloc(cb);
-    if ( !ntPath )
-    {
-        s = ERROR_NO_SYSTEM_RESOURCES;
-        EPrint("No memory for path!\n");
-        goto clean;
-    }
-    cch = GetFullPathNameW(filePathW, cch-4, &ntPath[4], NULL);
-    if ( cch == 0 )
-    {
-        s = GetLastError();
-        EPrint("Getting full path failed! (0x%x)\n", s);
-        goto clean;
-    }
-    *(PUINT64)ntPath = NT_PATH_PREFIX_W;
-
-    s = openFile(&file, ntPath, FILE_GENERIC_READ, FILE_SHARE_READ);
-    if ( s != 0 )
-    {
-        goto clean;
-    }
-
-    LARGE_INTEGER fileSize = {0};
-    b = GetFileSizeEx(file, &fileSize);
-    if ( !b || !fileSize.QuadPart )
-    {
-        s = GetLastError();
-        EPrint("Getting file size failed! (0x%x)\n", s);
-        goto clean;
-    }
-    if ( fileSize.HighPart )
-    {
-        s = ERROR_INVALID_PARAMETER;
-        EPrint("File too big! (0x%x)\n", s);
-        goto clean;
-    }
-
-    buffer = malloc(fileSize.LowPart);
-    if ( !buffer )
-    {
-        s = ERROR_NO_SYSTEM_RESOURCES;
-        EPrint("No memory for file data!\n");
-        goto clean;
-    }
-    size = fileSize.LowPart;
-            
-    IO_STATUS_BLOCK iosb;
-    RtlZeroMemory(&iosb, sizeof(iosb));
-            
-    s = NtReadFile(file, NULL, NULL, NULL, &iosb, buffer, size, NULL, NULL);
-    if ( s != 0 ) 
-    {
-        EPrint("Reading file data failed! (0x%x)\n", s);
-        goto clean;
-    }
-    size = (ULONG) iosb.Information;
-    
-    *Buffer = buffer;
-    *Size = size;
-
-clean:
-    if ( s != 0 )
-        free(buffer);
-
-    if ( ntPath )
-        free(ntPath);
-    if ( file )
-        NtClose(file);
-
-    return s;
-}
-
-INT parseRandom(_In_ PCHAR SizeStr, _Out_ PVOID *Buffer, _Out_ PULONG BufferSize)
-{
-    INT s = 0;
-                
-    PVOID buffer = NULL;
-    ULONG size = 0;
-
-    *Buffer = NULL;
-    *BufferSize = 0;
-
-    STR_TO_ULONG_CLN(size, SizeStr, s);
-    buffer = malloc(size);
-    if ( !buffer )
-    {
-        s = ERROR_NO_SYSTEM_RESOURCES;
-        EPrint("No memory for random data!\n");
-        goto clean;
-    }
-
-    s = genRand(buffer, size);
-    if ( s != 0 )
-    {
-        EPrint("Generating random failed!\n");
-        goto clean;
-    }
-    
-    *Buffer = buffer;
-    *BufferSize = size;
-
-clean:
-    if ( s != 0 )
-        free(buffer);
-
-    return s;
-}
-
-INT parsePattern(_In_ PCHAR SizeStr, _Out_ PVOID *Buffer, _Out_ PULONG BufferSize)
-{
-    INT s = 0;
-    
-    PVOID buffer = NULL;
-    ULONG size = 0;
-
-    *Buffer = NULL;
-    *BufferSize = 0;
-
-    STR_TO_ULONG_CLN(size, SizeStr, s);
-    buffer = malloc(size);
-    if ( !buffer )
-    {
-        s = ERROR_NO_SYSTEM_RESOURCES;
-        EPrint("No memory for pattern data!\n");
-        goto clean;
-    }
-
-    s = genPattern(buffer, size);
-    if ( s != 0 )
-    {
-        EPrint("Generating pattern failed!\n");
-        goto clean;
-    }
-    
-    *Buffer = buffer;
-    *BufferSize = size;
-
-clean:
-    if ( s != 0 )
-        free(buffer);
-
-    return s;
-}
-
-INT parseCustomPattern(_In_ PCHAR Pattern, _In_ PCHAR PatternSizeStr, _Out_ PVOID *Buffer, _Out_ PULONG BufferSize)
-{
-    INT s = 0;
-                
-    UINT64 patternStart = 0;
-    PUINT8 patternStartPtr = (PUINT8)&patternStart;
-    ULONG patternCb = 0;
-
-    PVOID buffer = NULL;
-    ULONG bufferSize = 0;
-
-    *Buffer = NULL;
-    *BufferSize = 0;
-
-    s = parsePlainBytes(Pattern, &patternStartPtr, &patternCb, 8);
-    if ( s != 0 )
-    {
-        goto clean;
-    }
-
-    bufferSize = (ULONG)strtoul(PatternSizeStr, NULL, 0);
-    buffer = malloc(bufferSize);
-    if ( !buffer )
-    {
-        s = ERROR_NO_SYSTEM_RESOURCES;
-        EPrint("No memory for pattern data!\n");
-        goto clean;
-    }
-
-    s = genCustomPattern(patternStart, patternCb, buffer, bufferSize);
-    if ( s != 0 )
-    {
-        EPrint("Generating pattern failed!\n");
-        goto clean;
-    }
-    
-    *Buffer = buffer;
-    *BufferSize = bufferSize;
-
-clean:
-    if ( s != 0 )
-        free(buffer);
-
-    return s;
-}
-
-FORCEINLINE
-INT parseIOBSize(_Inout_ PVOID* Buffer, _In_ ULONG BufferSize, _In_ UINT8 FillValue)
-{
-    INT s = 0;
-
-    if ( BufferSize > 0 && !(*Buffer) )
-    {
-        (*Buffer) = malloc(BufferSize);
-        if ( !(*Buffer) )
-        {
-            s = ERROR_NO_SYSTEM_RESOURCES;
-            EPrint("Buffer malloc failed! (0x%x)\n", s);
-            goto clean;
-        }
-        memset((*Buffer), FillValue, BufferSize);
-    }
-
-clean:
-    return s;
 }
 
 INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
@@ -1208,370 +884,28 @@ clean:
     return s;
 }
 
-// parse input ints to an input "struct"
-int parseIOnts(
-    _In_ int argc, 
-    _In_ char** argv, 
-    _In_ PIOPUT_INT Data, 
-    _In_ INT Count, 
-    _Inout_ PVOID* Buffer,
-    _Inout_ PULONG BufferSize
-)
-{
-    int s = 0;
-    INT i;
-                
-    PVOID buffer = NULL;
-    ULONG size = 0;
-
-    if ( !Count )
-        return 0;
-
-    if ( *Buffer )
-    {
-        printf("[i] Data already set! Skipping!\n");
-        return 0;
-    }
-
-    // get needed size
-    // max is MAX_INTS * 8 = 0x80
-    for ( i = 0; i < Count; i++ )
-    {
-        size += Data[i].Size;
-    }
-
-    // allocate buffer
-    buffer = malloc(size);
-    if ( !buffer )
-    {
-        s = ERROR_NO_SYSTEM_RESOURCES;
-        EPrint("No memory for data! (0x%x)\n", s);
-        goto clean;
-    }
-
-    // fill buffer
-    
-    __try
-    {
-        PUINT8 ptr = buffer;
-        for ( i = 0; i < Count; i++ )
-        {
-            // should not happen
-            if ( Data[i].Id >= argc )
-            {
-                s = ERROR_INVALID_PARAMETER;
-                EPrint("Invalid int id! (0x%x)\n", s);
-                goto clean;
-            }
-
-            switch ( Data[i].Size )
-            {
-                case 1:
-                    *(PUINT8)ptr = (UINT8)strtoul(argv[Data[i].Id], NULL, 0);
-                    ptr++;
-                    break;
-                case 2:
-                    *(PUINT16)ptr = (UINT16)strtoul(argv[Data[i].Id], NULL, 0);
-                    ptr+=2;
-                    break;
-                case 4:
-                    *(PUINT32)ptr = (UINT32)strtoul(argv[Data[i].Id], NULL, 0);
-                    ptr+=4;
-                    break;
-                case 8:
-                    *(PUINT64)ptr = (UINT64)strtoull(argv[Data[i].Id], NULL, 0);
-                    ptr+=8;
-                    break;
-                default:
-                    s = ERROR_INVALID_PARAMETER;
-                    goto clean;
-            }
-        }
-    }
-    __except ( EXCEPTION_EXECUTE_HANDLER )
-    {
-        s = GetExceptionCode();
-        printf("[X] Exception parsing input number! (0x%x)\n", s);
-        goto clean;
-    }
-
-    *Buffer = buffer;
-    *BufferSize = size;
-
-clean:
-    if ( s != 0 )
-        free(buffer);
-
-    return s;
-}
-
-INT parseSe(
-    _In_ INT argc, 
-    _In_reads_(argc) CHAR** argv, 
-    _Inout_ PSE Se, 
-    _In_ PINT Ids, 
-    _In_ INT IdsCount
-)
-{
-    INT i;
-    PCHAR arg = NULL;
-    SIZE_T reqSize = 0;
-    ULONG count = 0;
-    
-    if ( IdsCount == 0 )
-        return 0;
-
-    //
-    // get required size of flat array
-
-    for ( i = 0; i < IdsCount; i++ )
-    {
-        if ( Ids[i] >= argc )
-        {
-            Ids[i] = -1;
-            continue;
-        }
-
-        arg = argv[Ids[i]];
-        
-        // sanitization checks
-        if ( arg == NULL || arg[0] == 0 || arg[0] == LIN_PARAM_IDENTIFIER || arg[0] == WIN_PARAM_IDENTIFIER )
-        {
-            Ids[i] = -1;
-            continue;
-        }
-        
-        // value checks
-        UINT32 val = strtoul(arg, NULL, 0);
-        if ( val < SE_MIN_WELL_KNOWN_PRIVILEGE || val > SE_MAX_WELL_KNOWN_PRIVILEGE )
-        {
-            Ids[i] = -1;
-            continue;
-        }
-
-        count++;
-    }
-
-    if ( count == 0 )
-        return -1;
-    
-    reqSize = count * sizeof(UINT32);
-    if ( reqSize > ULONG_MAX )
-        return -1;
-
-
-    //
-    // alloc buffer
-    
-    Se->List = (PULONG)malloc(reqSize);
-    if ( !Se->List )
-        return ERROR_NO_SYSTEM_RESOURCES;
-    RtlZeroMemory(Se->List, reqSize);
-
-    //
-    // fill array buffer with strings
-    
-    ULONG j = 0;
-    for ( i = 0; i < IdsCount; i++ )
-    {
-        if ( Ids[i] == -1)
-        {
-            continue;
-        }
-        
-        arg = argv[Ids[i]];
-        UINT32 val = strtoul(arg, NULL, 0);
-
-        Se->List[j] = val;
-        j++;
-    }
-    Se->Count = j;
-
-    DPrintMemCols32(Se->List, (Se->Count*4), 0);
-
-    return 0;
-}
-
 int openDevice(_Out_ PHANDLE Device, _In_ CHAR* DeviceNameA, _In_ ACCESS_MASK DesiredAccess, _In_ ULONG ShareAccess)
 {
     INT s = 0;
-    WCHAR deviceNameW[MAX_PATH];
-    StringCchPrintfW(deviceNameW, MAX_PATH, L"%hs", DeviceNameA);
-    deviceNameW[MAX_PATH-1] = 0;
+    PWCHAR deviceNameW = NULL;
+    SIZE_T deviceNameWCb = strlen(DeviceNameA) * 2;
 
     *Device = NULL;
 
+    deviceNameW = (PWCHAR)malloc(deviceNameWCb + 2);
+    if ( !deviceNameW )
+        return STATUS_INSUFFICIENT_RESOURCES;
+    
+    s = StringCbPrintfW(deviceNameW, deviceNameWCb+2, L"%hs", DeviceNameA);
+    if ( s != 0 )
+        goto clean;
+
+
     s = openFile(Device, deviceNameW, DesiredAccess, ShareAccess);
 
-    return s;
-}
-
-int openFile(
-    _Out_ PHANDLE File, 
-    _In_ PWCHAR FileName, 
-    _In_ ACCESS_MASK DesiredAccess, 
-    _In_ ULONG ShareAccess
-)
-{
-    NTSTATUS status = 0;
-    OBJECT_ATTRIBUTES objAttr = { 0 };
-    UNICODE_STRING fileNameUS;
-    IO_STATUS_BLOCK iostatusblock = { 0 };
-
-    RtlInitUnicodeString(&fileNameUS, FileName);
-    objAttr.Length = sizeof(objAttr);
-    objAttr.ObjectName = &fileNameUS;
-    
-    *File = NULL;
-
-    status = NtCreateFile(
-                File,
-                DesiredAccess,
-                &objAttr,
-                &iostatusblock,
-                NULL,
-                FILE_ATTRIBUTE_NORMAL,
-                ShareAccess,
-                FILE_OPEN,
-                FILE_NON_DIRECTORY_FILE|FILE_SYNCHRONOUS_IO_NONALERT,
-                NULL, 
-                0
-            );
-    if ( status != 0 )
-    {
-        EPrint("Open file failed! (0x%x) [%s].\n", status, getStatusString(status));
-        return status;
-    }
-
-    return 0;
-}
-
-INT genPattern(_Inout_ PVOID Buffer, _In_ ULONG Size)
-{
-    //ULONG parts = Size / 3;
-    ULONG rest = Size % 3;
-
-    PUINT8 b = (PUINT8)Buffer;
-    ULONG j = 0;
-    UINT8 f = 0;
-    UINT8 s = 0;
-    UINT8 t = 0;
-
-    if ( !Size || Size > MAX_DEF_PATTERN_SIZE )
-        return ERROR_INVALID_PARAMETER;
-
-    for ( f = 'A'; f <= 'Z'; f++ )
-    {
-        for ( s = 'a'; s <= 'z'; s++ )
-        {
-            for ( t = '0'; t <= '9'; t++ )
-            {
-                if ( j + 3 > Size )
-                    goto endAligned;
-                
-                b[j] = f;
-                b[j+1] =  s;
-                b[j+2] = t;
-                
-                j += 3;
-            }
-        }
-    }
-endAligned:
-    if ( rest >= 1 )
-    {
-        b[j] = f;
-    }
-    if ( rest == 2 )
-    {
-        b[j+1] = s;
-    }
-
-    return 0;
-}
-
-INT genCustomPattern(_In_ UINT64 PatternStart, _In_ ULONG PatternSize, _Inout_ PVOID Buffer, _In_ ULONG BufferSize)
-{
-    INT s = 0;
-    PUINT8 b = (UINT8*)Buffer;
-    UINT64 i = 0;
-    UINT64 v = 0;
-    UINT64 end = BufferSize - ( BufferSize % PatternSize );
-    UINT8 rest = (UINT8)(BufferSize % PatternSize);
-
-    DPrint("PatternStart: 0x%llx\n", PatternStart);
-    DPrint("PatternSize: 0x%x\n", PatternSize);
-    DPrint("end: 0x%llx\n", end);
-    
-    v = PatternStart;
-
-    for ( i = 0; i < end; i+=PatternSize )
-    {
-        DPrint("[%llu] v: 0x%llx\n", i, v);
-        switch ( PatternSize )
-        {
-            case 1:
-                b[i] = (UINT8)v;
-                break;
-            case 2:
-                *(PUINT16)&b[i] = ((UINT16)v);
-                break;
-            case 3:
-                b[i] =   (UINT8)((v & 0x0000FFu));
-                b[i+1] = (UINT8)((v & 0x00FF00u) >> 0x08u);
-                b[i+2] = (UINT8)((v & 0xFF0000u) >> 0x10u);
-                break;
-            case 4:
-                *(PUINT32)&b[i] = ((UINT32)v);
-                break;
-            case 5:
-                b[i] =   (UINT8)((v & 0x00000000FFu));
-                b[i+1] = (UINT8)((v & 0x000000FF00ull) >> 0x08u);
-                b[i+2] = (UINT8)((v & 0x0000FF0000ull) >> 0x10u);
-                b[i+3] = (UINT8)((v & 0x00FF000000ull) >> 0x18u);
-                b[i+4] = (UINT8)((v & 0xFF00000000ull) >> 0x20u);
-                break;
-            case 6:
-                b[i] =   (UINT8)((v & 0x0000000000FFu));
-                b[i+1] = (UINT8)((v & 0x00000000FF00ull) >> 0x08u);
-                b[i+2] = (UINT8)((v & 0x000000FF0000ull) >> 0x10u);
-                b[i+3] = (UINT8)((v & 0x0000FF000000ull) >> 0x18u);
-                b[i+4] = (UINT8)((v & 0x00FF00000000ull) >> 0x20u);
-                b[i+5] = (UINT8)((v & 0xFF0000000000ull) >> 0x28u);
-                break;
-            case 7:
-                b[i] =   (UINT8)((v & 0x000000000000FFu));
-                b[i+1] = (UINT8)((v & 0x0000000000FF00ull) >> 0x08u);
-                b[i+2] = (UINT8)((v & 0x00000000FF0000ull) >> 0x10u);
-                b[i+3] = (UINT8)((v & 0x000000FF000000ull) >> 0x18u);
-                b[i+4] = (UINT8)((v & 0x0000FF00000000ull) >> 0x20u);
-                b[i+5] = (UINT8)((v & 0x00FF0000000000ull) >> 0x28u);
-                b[i+6] = (UINT8)((v & 0xFF000000000000ull) >> 0x30u);
-                break;
-            case 8:
-                *(PUINT64)&b[i] = ((UINT64)v);
-                break;
-            default:
-                EPrint("Not aligned!\n");
-                s = ERROR_INVALID_PARAMETER;
-                break;
-        }
-
-        v = swapUint64(v);
-        if ( PatternSize < 8 )
-            v = v >> ((8-PatternSize) * 8);
-        v++;
-        if ( PatternSize < 8 )
-            v = v << ((8-PatternSize) * 8);
-        v = swapUint64(v);
-    }
-
-    for ( i = 0; i < rest; i++ )
-    {
-        UINT64 mask = 0xFFull << (i*8);
-        UINT64 shift = (0x08ull*i);
-        b[end+i] = (UINT8)((v & mask) >> shift);
-    }
+clean:
+    if ( deviceNameW )
+        free(deviceNameW);
 
     return s;
 }

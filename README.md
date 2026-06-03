@@ -4,8 +4,8 @@ Talks to a device using NtDeviceIoControl.
 
 
 ## Version
-2.2.0  
-Last changed: 12.12.2025
+2.2.1  
+Last changed: 03.06.2026
 
 ## Contents
 * [Requirements](#requirements)
@@ -127,7 +127,7 @@ Call beep
 ```bash
 # with a byte string
 $ Talk.exe /n \Device\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e
-# with two ulongs
+# with two ulongs interpreted as a struct { ULONG freq; ULONG dur; }
 $ Talk.exe /n \Device\Beep /c 0x10000 /id 0x202 /id 0x83e /s 0x083e
 ```
 

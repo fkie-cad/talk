@@ -154,7 +154,7 @@
 }
 
 #define PrintMemCols64(_b_, _s_, _a_) \
-{\
+{ \
     UINT64 _hw_v_ = (UINT64)_a_ + _s_; \
     UINT8 _hw_w_ = 0x10; \
     UINT64 _s_cpy_ = _s_; \
@@ -254,7 +254,7 @@ const char* getStatusString(NTSTATUS status)
         STATUS_CASE_DESC(STATUS_ILLEGAL_FUNCTION, "STATUS_ILLEGAL_FUNCTION: The specified handle is not open to the server end of the named pipe.")
         STATUS_CASE(STATUS_NOT_SUPPORTED)
         STATUS_CASE(STATUS_NOT_FOUND)
-        STATUS_CASE_DESC(STATUS_DATATYPE_MISALIGNMENT_ERROR, "STATUS_DATATYPE_MISALIGNMENT_ERROR: A data type misalignment error was detected in a load or store instruction")
+        STATUS_CASE_DESC(STATUS_DATATYPE_MISALIGNMENT_ERROR, "STATUS_DATATYPE_MISALIGNMENT_ERROR: A data type misalignment error was detected in a load or store instruction.")
         default:
             return "Unknown status code";
     }

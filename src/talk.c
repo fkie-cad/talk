@@ -20,8 +20,8 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.2.1"
-#define LAST_CHANGED "03.06.2026"
+#define VERSION "2.2.2"
+#define LAST_CHANGED "12.06.2026"
 
 
 #define PRINT_MODE_NONE         (0x00) // 0000

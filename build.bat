@@ -18,6 +18,7 @@ set /a bitness=64
 set /a debug_print=EP_FLAG
 set /a pdb=0
 set /a static=0
+set /a ico=0
 set platform=x64
 set configuration=Debug
 
@@ -87,7 +88,16 @@ GOTO :ParseParams
         SET /a bitness=%~2
         SHIFT
         goto reParseParams
-    ) 
+    )
+
+    IF /i "%~1"=="/i" (
+        SET /a ico=1
+        goto reParseParams
+    )
+    IF /i "%~1"=="/ico" (
+        SET /a ico=1
+        goto reParseParams
+    )
 
     IF /i "%~1"=="/v" (
         SET /a verbose=1
@@ -139,6 +149,7 @@ GOTO :ParseParams
         echo dprint: %debug_print%
         echo static: %static%
         echo pts: %pts%
+        echo ico: %ico%
     )
 
     if %cln% == 1 (
@@ -156,8 +167,8 @@ GOTO :ParseParams
 :build
     SETLOCAL
         set proj=%~1
-        if %debug%==1 call :buildEx %proj%,%platform%,Debug,%debug_print%,%static%,%pdb%,%pts%
-        if %release%==1 call :buildEx %proj%,%platform%,Release,%debug_print%,%static%,%pdb%,%pts%
+        if %debug%==1 call :buildEx %proj%,%platform%,Debug,%debug_print%,%static%,%pdb%,%pts%,%ico%
+        if %release%==1 call :buildEx %proj%,%platform%,Release,%debug_print%,%static%,%pdb%,%pts%,%ico%
     ENDLOCAL
     
     EXIT /B %ERRORLEVEL%
@@ -171,6 +182,7 @@ GOTO :ParseParams
         set rtl=%~5
         set /a pdb=%~6
         set pts=%~7
+        set /a ico=%~8
         
         :: print flags
         set /a "dp=%dpf%&~EP_FLAG"
@@ -200,10 +212,11 @@ GOTO :ParseParams
             echo  - RuntimeLib=%rtl%
             echo  - PDB=%pdb%
             echo  - PTS=%pts%
+            echo  - ico=%ico%
             echo.
         )
         
-        msbuild %proj% /p:Platform=%platform% /p:Configuration=%conf% /p:PlatformToolset=%pts% /p:DebugPrint=%dp% /p:ErrorPrint=%ep% /p:RuntimeLib=%rtl% /p:PDB=%pdb%
+        msbuild %proj% /p:Platform=%platform% /p:Configuration=%conf% /p:PlatformToolset=%pts% /p:DebugPrint=%dp% /p:ErrorPrint=%ep% /p:RuntimeLib=%rtl% /p:PDB=%pdb% /p:Icon=%ico%
         echo.
         echo ----------------------------------------------------
         echo.
@@ -214,7 +227,7 @@ GOTO :ParseParams
 
 
 :usage
-    echo Usage: %my_name% [/talk] [/d] [/r] [/b 32^|64] [/pdb] [/static]
+    echo Usage: %my_name% [/talk] [/d] [/r] [/b 32^|64] [/pdb] [/static] [/ico]
     echo Default: %my_name% [/talk /r /b 64]
     exit /B 0
     
@@ -230,7 +243,8 @@ GOTO :ParseParams
     echo /b: Bitness of exe. 32^|64. Default: 64.
     echo /pdb: Compile with pdbs.
     echo /static: Statically include RuntimeLibraries.
-    echo /pts: msbuild PlatformToolSet. Default: v142.
+    echo /pts: msbuild PlatformToolSet. Default: v145.
+    echo /ico: Build with app icon.
     echo.
     echo /v: More verbose mode.
     echo /h: Print this.

@@ -140,6 +140,10 @@
       <PreprocessorDefinitions>ERROR_PRINT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
+  
+  <ItemGroup Condition="'$(Icon)'=='1'">
+    <ResourceCompile Include="res\talk.rc" />
+  </ItemGroup>
 
   <ItemGroup>
     <ClCompile Include="src\talk.c" />

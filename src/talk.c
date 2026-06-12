@@ -68,6 +68,7 @@ typedef struct CmdParams {
 
 
 
+
 INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params);
 BOOL checkArgs(_In_ CmdParams* Params);
 void printArgs(_In_ PCmdParams Params);
@@ -333,8 +334,19 @@ clean:
 
 #define STR_TO_ULONG(__out__, __val__, __s__) \
 { \
+    char* __endPtr = NULL; \
     __try { \
-        __out__ = (ULONG)strtoul(__val__, NULL, 0); \
+        __out__ = strtoul(__val__, &__endPtr, 0); \
+        if ( __val__ == __endPtr ) \
+        { \
+            __s__ = ERROR_INVALID_PARAMETER; \
+            printf("[e] Conversion failed! (0x%x)\n", __s__); \
+        } \
+        if ( errno != 0 ) \
+        { \
+            __s__ = errno; \
+            printf("[e] Overflow occured! (0x%x)\n", __s__); \
+        } \
     } \
     __except ( EXCEPTION_EXECUTE_HANDLER ) \
     { \
@@ -346,8 +358,19 @@ clean:
 
 #define STR_TO_ULONG_X(__out__, __val__, __s__) \
 { \
+    char* __endPtr = NULL; \
     __try { \
-        __out__ = (ULONG)strtoul(__val__, NULL, 16); \
+        __out__ = strtoul(__val__, &__endPtr, 16); \
+        if ( __val__ == __endPtr ) \
+        { \
+            __s__ = ERROR_INVALID_PARAMETER; \
+            printf("[e] Conversion failed! (0x%x)\n", __s__); \
+        } \
+        if ( errno != 0 ) \
+        { \
+            __s__ = errno; \
+            printf("[e] Overflow occured! (0x%x)\n", __s__); \
+        } \
     } \
     __except ( EXCEPTION_EXECUTE_HANDLER ) \
     { \

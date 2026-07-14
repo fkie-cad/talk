@@ -1,11 +1,12 @@
 # Talk
 
 Talks to a device using NtDeviceIoControl.
+Arbitrary devices can be called with arbitrary ioctls and buffers to test functionality or else.
 
 
 ## Version
-2.2.2  
-Last changed: 12.06.2026
+2.2.3  
+Last changed: 14.07.2026
 
 ## Contents
 * [Requirements](#requirements)
@@ -119,7 +120,7 @@ The resulting input size would be 8 bytes, equal to the first example.
 The order the integers are given in does matter.
 
 The custom `<pattern>` of `/ipc` (`/opc`) is interpreted as a byte string, 
-i.e. the input of `/ipc 414243 10` will result in the input data of `41 42 43 41 42 44 41 42 45 41`.
+i.e. the input of `/ipc 414243 10` will result to a 10 byte long input data of `41 42 43 41 42 44 41 42 45 41`.
 
 
 ### Examples
@@ -127,6 +128,7 @@ Call beep
 ```bash
 # with a byte string
 $ Talk.exe /n \Device\Beep /c 0x10000 /ix 020200003e080000 /s 0x083e
+
 # with two ulongs interpreted as a struct { ULONG freq; ULONG dur; }
 $ Talk.exe /n \Device\Beep /c 0x10000 /id 0x202 /id 0x83e /s 0x083e
 ```

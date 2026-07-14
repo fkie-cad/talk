@@ -20,8 +20,8 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.2.2"
-#define LAST_CHANGED "12.06.2026"
+#define VERSION "2.2.3"
+#define LAST_CHANGED "14.07.2026"
 
 
 #define PRINT_MODE_NONE         (0x00) // 0000
@@ -243,14 +243,10 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
             printf("Waiting for event to signal.\n");
         }
         status = NtWaitForSingleObject(event, 0, 0);
-        if ( status != 0 )
-        {
-            EPrint("Wait failed! (0x%x)\n", status);
-            goto clean;
-        }
+        if ( status == 0 )
+            status = iosb.Status;
     }
 
-    status = iosb.Status;
     if ( status != 0 )
     {
         EPrint("DeviceIo failed! (0x%08x)\n", status);
@@ -283,7 +279,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
         printf("\n");
 
 // warning C6385: Reading invalid data from 'outputBuffer':  the readable size is 'Params->OutputBufferSize' bytes, but '2' bytes may be read ??
-#pragma warning ( disable : 6385 )
+DISABLE_WARNING ( 6385 )
         switch ( Params->Flags.PrintMode )
         {
             case PRINT_MODE_BYTES:
@@ -314,7 +310,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
                 PrintMemCols8(outputBuffer, bytesReturned, 0);
                 break;
         }
-#pragma warning ( default : 6385 )
+DEFAULT_WARNING ( 6385 )
         printf("-----------------------------");
         for ( UINT32 zci = 0; zci < zc; zci++ ) printf("-");
         printf("\n");

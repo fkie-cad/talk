@@ -14,15 +14,20 @@
     __hcw_w__ = _hcw_w_; \
 }
 
-static inline BOOL isPrintableW(UINT16 wc)
+//
+// stick to ASCII only for safety and simplicity
+//
+static inline void putPrintableA(UINT8 c)
 {
-    return !( wc < 0x20
-            || (wc >= 0x7F && wc <= 0x9F) /* C0/C1 controls */
-            || (wc >= 0xD800 && wc <= 0xDFFF) /* unpaired surrogates */
-            || (wc >= 0xFDD0 && wc <= 0xFDEF) /* noncharacters */
-            || wc == 0xFFFE || wc == 0xFFFF /* noncharacters */
-            || wc == 0xFEFF /* BOM/ZWNBSP */
-        );
+    putchar(( c >= 0x20 && c <= 0x7E ) ? (CHAR)c : '.');
+}
+
+//
+// stick to ASCII only for safety and simplicity
+//
+static inline void putPrintableW(UINT16 wc)
+{
+    putchar(( wc >= 0x20 && wc <= 0x7E ) ? (CHAR)wc : '.');
 }
 
 #ifdef DEBUG_PRINT
@@ -96,15 +101,7 @@ void PrintMemCols8(PVOID _b_, SIZE_T _s_, SIZE_T _a_)
         printf("  ");
         for ( UINT64 _k_ = _i_; _k_ < _end_; _k_++ )
         {
-            UINT8 _c_ = ((PUINT8)_b_)[_k_];
-            if ( _c_ < 0x20 || _c_ > 0x7E )
-            {
-                printf(".");
-            } 
-            else
-            {
-                printf("%c", _c_);
-            }
+            putPrintableA(((PUINT8)_b_)[_k_]);
         }
         printf("\n");
     }
@@ -137,15 +134,7 @@ void PrintMemCols16(PVOID _b_, SIZE_T _s_, UINT64 _a_)
         printf("  ");
         for ( UINT64 _j_ = _i_; _j_ < _end_; _j_+=2 )
         {
-            UINT16 _wc_ = *(PUINT16)&(((PUINT8)_b_)[_j_]);
-            if ( !isPrintableW(_wc_) )
-            {
-                printf(".");
-            }
-            else
-            {
-                printf("%wc", _wc_);
-            }
+            putPrintableW(*(PUINT16)&(((PUINT8)_b_)[_j_]));
         }
         printf("\n");
     }
@@ -254,22 +243,23 @@ void PrintMemByteStr(PVOID _b_, SIZE_T _s_)
     printf("\n");
 }
 
-// in print.h
+FORCEINLINE
+void PrintAStr(PVOID b, SIZE_T s)
+{
+    for ( SIZE_T k = 0; k < s; k++ )
+    {
+        putPrintableA(((PUINT8)b)[k]);
+    }
+    printf("\n");
+}
+
 FORCEINLINE
 void PrintWStr(PVOID b, SIZE_T s)
 {
-    UINT64 n = (UINT64)(s) / 2;
-    for ( UINT64 k = 0; k < n; k++ )
+    SIZE_T n = s / 2;
+    for ( SIZE_T k = 0; k < n; k++ )
     {
-        UINT16 wc = *(PUINT16)&(((PUINT8)b)[k * 2]);
-        if ( !isPrintableW(wc) )
-        {
-            printf(".");
-        }
-        else
-        {
-            printf("%wc", wc);
-        }
+        putPrintableW(*(PUINT16)&(((PUINT8)b)[k * 2]));
     }
     printf("\n");
 }

@@ -1,4 +1,3 @@
-#include <locale.h>
 #include <windows.h>
 #include <winternl.h>
 #include <stdio.h>
@@ -21,7 +20,7 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.2.4"
+#define VERSION "2.2.5"
 #define LAST_CHANGED "15.09.2026"
 
 
@@ -95,8 +94,6 @@ int generateIoRequest(
 
 int _cdecl main(int argc, char** argv)
 {
-    setlocale(LC_CTYPE, "");
-
     HANDLE device = NULL;
     CmdParams params;
     INT s;
@@ -342,11 +339,10 @@ DISABLE_WARNING ( 6385 )
                 PrintMemColsBits(outputBuffer, bytesReturned, 0);
                 break;
             case PRINT_MODE_ASCII:
-                printf("%.*s\n", bytesReturned, outputBuffer);
+                PrintAStr(outputBuffer, bytesReturned);
                 break;
             case PRINT_MODE_UNICODE:
                 PrintWStr(outputBuffer, bytesReturned);
-                //printf("%.*ws\n", bytesReturned/2, (PWCHAR)outputBuffer);
                 break;
             default:
                 PrintMemCols8(outputBuffer, bytesReturned, 0);

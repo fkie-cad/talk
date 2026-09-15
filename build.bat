@@ -18,7 +18,7 @@ set /a bitness=64
 set /a debug_print=EP_FLAG
 set /a pdb=0
 set /a static=0
-set /a ico=0
+set /a ico=1
 set platform=x64
 set configuration=Debug
 
@@ -90,12 +90,12 @@ GOTO :ParseParams
         goto reParseParams
     )
 
-    IF /i "%~1"=="/i" (
-        SET /a ico=1
+    IF /i "%~1"=="/xi" (
+        SET /a ico=0
         goto reParseParams
     )
-    IF /i "%~1"=="/ico" (
-        SET /a ico=1
+    IF /i "%~1"=="/xico" (
+        SET /a ico=0
         goto reParseParams
     )
 
@@ -227,7 +227,7 @@ GOTO :ParseParams
 
 
 :usage
-    echo Usage: %my_name% [/talk] [/d] [/r] [/b 32^|64] [/pdb] [/static] [/ico]
+    echo Usage: %my_name% [/talk] [/d] [/r] [/b 32^|64] [/pdb] [/static] [/xi]
     echo Default: %my_name% [/talk /r /b 64]
     exit /B 0
     
@@ -244,7 +244,7 @@ GOTO :ParseParams
     echo /pdb: Compile with pdbs.
     echo /static: Statically include RuntimeLibraries.
     echo /pts: msbuild PlatformToolSet. Default: v145.
-    echo /ico: Build with app icon.
+    echo /xi: Build without app icon.
     echo.
     echo /v: More verbose mode.
     echo /h: Print this.

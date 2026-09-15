@@ -20,6 +20,8 @@
 #define STATUS_NOT_FOUND                     ((NTSTATUS)0xC0000225L)
 #define STATUS_DATATYPE_MISALIGNMENT_ERROR   ((NTSTATUS)0xC00002C5L)
 
+#define STATUS_BUFFER_OVERFLOW               ((NTSTATUS)0x80000005L)
+
 
 #define NT_PATH_PREFIX_W (0x005c003f003f005c)
 
@@ -66,6 +68,19 @@
 
 #define NtCurrentProcess() ((HANDLE)(LONG_PTR)-1)
 
+//
+// Macro to extract buffering method out of the device io control code
+//
+#define METHOD_FROM_CTL_CODE(ctrlCode)          ((DWORD)(ctrlCode & 3))
+
+//
+// Define the method codes for how buffers are passed for I/O and FS controls
+//
+
+#define METHOD_BUFFERED                 0
+#define METHOD_IN_DIRECT                1
+#define METHOD_OUT_DIRECT               2
+#define METHOD_NEITHER                  3
 
 typedef enum _EVENT_TYPE {
     NotificationEvent,

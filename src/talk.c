@@ -1,3 +1,4 @@
+#include <locale.h>
 #include <windows.h>
 #include <winternl.h>
 #include <stdio.h>
@@ -5,10 +6,10 @@
 #include <strsafe.h>
 
 #include "nt.h"
+#include "print.h"
+#include "Args.h"
 #include "warnings.h"
 #include "Converter.h"
-#include "Args.h"
-#include "print.h"
 #include "crypto/BRand.h"
 #include "privs.h"
 #include "helper.h"
@@ -20,8 +21,8 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.2.3"
-#define LAST_CHANGED "14.07.2026"
+#define VERSION "2.2.4"
+#define LAST_CHANGED "15.09.2026"
 
 
 #define PRINT_MODE_NONE         (0x00) // 0000
@@ -37,6 +38,7 @@
 
 #define PRINT_MODE_MAX  PRINT_MODE_UNICODE 
 
+#define DEFAULT_DA (FILE_GENERIC_READ|FILE_GENERIC_WRITE)
 #define DEFAULT_FILL_VALUE ('A')
 
 #define MAX_SE_COUNT (0x10)
@@ -60,7 +62,8 @@ typedef struct CmdParams {
     struct {
         ULONG Verbose:1;
         ULONG PrintMode:4;
-        ULONG Reserved:27;
+        ULONG ForceOutBufPrint:1;
+        ULONG Reserved:26;
     } Flags;
     BOOL TestHandle;
     CHAR FillValue;
@@ -92,35 +95,37 @@ int generateIoRequest(
 
 int _cdecl main(int argc, char** argv)
 {
+    setlocale(LC_CTYPE, "");
+
     HANDLE device = NULL;
     CmdParams params;
     INT s;
-
+    
     if ( isAskForHelp(argc, argv) )
     {
         printHelp();
         return 0;
     }
-
+    
     s = parseArgs(argc, argv, &params);
     if ( s != 0 )
     {
         printUsage();
         goto clean;
     }
-
+    
     if ( !checkArgs(&params) )
     {
         printUsage();
         s = ERROR_INVALID_PARAMETER;
         goto clean;
     }
-
+    
     if ( params.Flags.Verbose )
         printArgs(&params);
-
-
-
+    
+    
+    
     if ( params.Se.Count)
     {
         s = setPrivileges(params.Se.List, params.Se.Count, TRUE);
@@ -132,7 +137,7 @@ int _cdecl main(int argc, char** argv)
         }
         DPrint("SE privileges assigned.\n");
     }
-
+    
     s = openDevice(&device, params.DeviceName, params.DesiredAccess, params.ShareAccess);
     if ( s != 0 )
     {
@@ -151,9 +156,9 @@ int _cdecl main(int argc, char** argv)
             printf("\n");
         }
     }
-
+    
     s = generateIoRequest(device, &params);
-
+    
 clean:
     if ( params.Se.Count )
     {
@@ -169,10 +174,10 @@ clean:
         free(params.InputBufferData);
     if ( params.OutputBufferData )
         free(params.OutputBufferData);
-
+    
     if ( device )
         NtClose(device);
-
+    
     return s;
 }
 
@@ -232,8 +237,8 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     if ( Params->Flags.Verbose )
     {
         printf("returned\n");
-        printf("  status: 0x%x\n",status);
-        printf("  iosb.status: 0x%x\n",iosb.Status);
+        printf("  status: 0x%x\n", status);
+        printf("  iosb.status: 0x%x\n", iosb.Status);
     }
     if ( status == STATUS_PENDING )
     {
@@ -246,39 +251,75 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
         if ( status == 0 )
             status = iosb.Status;
     }
-
+    
     if ( status != 0 )
     {
-        EPrint("DeviceIo failed! (0x%08x)\n", status);
+        if ( NT_WARNING(status) )
+        {
+            printf("[w] DeviceIo failed! (0x%08x)\n", status);
+        }
+        else
+        {
+            EPrint("DeviceIo failed! (0x%08x)\n", status);
+        }
         if ( Params->Flags.Verbose )
         {
             printf("    %s\n", getStatusString(status));
             printf("    iosb info: 0x%08x\n", (ULONG)iosb.Information);
         }
-        goto clean;
-    };
+
+        // skip output buffer printing in error case, if not forced to print
+        // the output buffer of warnings should be printed anyway
+        if ( NT_ERROR(status) && !Params->Flags.ForceOutBufPrint )
+            goto clean;
+    }
 
     if ( Params->Sleep )
     {
         if ( Params->Flags.Verbose )
             printf("Sleeping for 0x%x (%u) ms.\n", Params->Sleep, Params->Sleep);
-
+        
         Sleep(Params->Sleep);
     }
-
+    
     printf("\n");
     
     bytesReturned = (ULONG)iosb.Information;
-
     printf("The driver returned 0x%x bytes:\n", bytesReturned);
-    if ( bytesReturned && bytesReturned <= Params->OutputBufferSize && outputBuffer )
+
+    if ( bytesReturned > Params->OutputBufferSize )
+    {
+        EPrint("Output buffer to small, adjust its size with the /os parameter.");
+        goto clean;
+    }
+
+    if ( !outputBuffer )
+    {
+        DPrint("No output buffer given!\n");
+        goto clean;
+    }
+    
+    SIZE_T toPrint = 0;
+    UINT32 method = METHOD_FROM_CTL_CODE(Params->IoCtl);
+    // use output buffer size, because iosb.Information is not reliable or not filled at all.
+    if ( method == METHOD_NEITHER || method == METHOD_OUT_DIRECT )
+    {
+        toPrint = Params->OutputBufferSize;
+    }
+    else
+    {
+        // for buffered io, iosb.Information is the only possible buffer size
+        toPrint = bytesReturned;
+    }
+    
+    if ( toPrint )
     {
         printf("-----------------------------");
         UINT32 zc = countHexChars(bytesReturned);
         for ( UINT32 zci = 0; zci < zc; zci++ ) printf("-");
         printf("\n");
 
-// warning C6385: Reading invalid data from 'outputBuffer':  the readable size is 'Params->OutputBufferSize' bytes, but '2' bytes may be read ??
+// warning C6385: Reading invalid data from 'outputBuffer': the readable size is 'Params->OutputBufferSize' bytes, but '2' bytes may be read ??
 DISABLE_WARNING ( 6385 )
         switch ( Params->Flags.PrintMode )
         {
@@ -304,7 +345,8 @@ DISABLE_WARNING ( 6385 )
                 printf("%.*s\n", bytesReturned, outputBuffer);
                 break;
             case PRINT_MODE_UNICODE:
-                printf("%.*ws\n", bytesReturned/2, (PWCHAR)outputBuffer);
+                PrintWStr(outputBuffer, bytesReturned);
+                //printf("%.*ws\n", bytesReturned/2, (PWCHAR)outputBuffer);
                 break;
             default:
                 PrintMemCols8(outputBuffer, bytesReturned, 0);
@@ -314,10 +356,6 @@ DEFAULT_WARNING ( 6385 )
         printf("-----------------------------");
         for ( UINT32 zci = 0; zci < zc; zci++ ) printf("-");
         printf("\n");
-    }
-    else if ( bytesReturned > Params->OutputBufferSize )
-    {
-        EPrint("Output buffer to small, adjust its size with the /os parameter.")
     }
 
 
@@ -330,50 +368,12 @@ clean:
 
 #define STR_TO_ULONG(__out__, __val__, __s__) \
 { \
-    char* __endPtr = NULL; \
-    __try { \
-        __out__ = strtoul(__val__, &__endPtr, 0); \
-        if ( __val__ == __endPtr ) \
-        { \
-            __s__ = ERROR_INVALID_PARAMETER; \
-            printf("[e] Conversion failed! (0x%x)\n", __s__); \
-        } \
-        if ( errno != 0 ) \
-        { \
-            __s__ = errno; \
-            printf("[e] Overflow occured! (0x%x)\n", __s__); \
-        } \
-    } \
-    __except ( EXCEPTION_EXECUTE_HANDLER ) \
-    { \
-        __s__ = GetExceptionCode(); \
-        printf("[X] Exception parsing input number! (0x%x)\n", __s__); \
-        break; \
-    } \
+    __s__ = parseUint32((__val__), &(__out__), 0); \
 }
 
 #define STR_TO_ULONG_X(__out__, __val__, __s__) \
 { \
-    char* __endPtr = NULL; \
-    __try { \
-        __out__ = strtoul(__val__, &__endPtr, 16); \
-        if ( __val__ == __endPtr ) \
-        { \
-            __s__ = ERROR_INVALID_PARAMETER; \
-            printf("[e] Conversion failed! (0x%x)\n", __s__); \
-        } \
-        if ( errno != 0 ) \
-        { \
-            __s__ = errno; \
-            printf("[e] Overflow occured! (0x%x)\n", __s__); \
-        } \
-    } \
-    __except ( EXCEPTION_EXECUTE_HANDLER ) \
-    { \
-        __s__ = GetExceptionCode(); \
-        printf("[X] Exception parsing input number! (0x%x)\n", __s__); \
-        break; \
-    } \
+    __s__ = parseUint32((__val__), &(__out__), 16); \
 }
 
 #define CONTINUE_IF_ID_SET(__id__, __i__) \
@@ -437,7 +437,7 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
     INT seIdCount = 0;
     
     ZeroMemory(Params, sizeof(CmdParams));
-    Params->DesiredAccess = FILE_GENERIC_READ|FILE_GENERIC_WRITE;
+    Params->DesiredAccess = DEFAULT_DA;
     Params->ShareAccess = FILE_SHARE_READ|FILE_SHARE_WRITE;
     Params->FillValue = DEFAULT_FILL_VALUE;
 
@@ -537,7 +537,7 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'ia') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No ascii string given!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No ASCII string given!\n");
 
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
             
@@ -691,7 +691,7 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_2C_ARG(arg, 'oa') )
         {
-            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No ascii string given!\n");
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No ASCII string given!\n");
 
             CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
 
@@ -853,6 +853,10 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         else if ( IS_2C_ARG(arg, 'pu') )
         {
             Params->Flags.PrintMode = PRINT_MODE_UNICODE;
+        }
+        else if ( IS_4C_ARG(arg, 'fobp') )
+        {
+            Params->Flags.ForceOutBufPrint = 1;
         }
         else if ( IS_1C_ARG(arg, 'v') )
         {
@@ -1043,9 +1047,10 @@ void printHelp()
     printf("    * /opc Input data will be filled with <size> custom pattern bytes, starting from <pattern>, incremented by 1.\n");
     printf(" - /s Duration of a possible sleep after device io.\n");
     printf(" - /t Just test the device for accessibility. Don't send data.\n");
-    printf(" - /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x%x.\n", (FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE));
+    printf(" - /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE = 0x%x.\n", DEFAULT_DA);
     printf(" - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x%x.\n", (FILE_SHARE_READ|FILE_SHARE_WRITE));
     printf(" - /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x%x) times for multiple privileges.\n", MAX_SE_COUNT);
+    printf(" - /fobp Force printing of the output buffer, even in an error case.\n");
     printf(" - Printing style for output buffer:\n");
     printf("    * /pb Print in plain space separated bytes.\n");
     printf("    * /pbs Print in plain byte string.\n");

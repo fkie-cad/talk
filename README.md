@@ -5,8 +5,8 @@ Arbitrary devices can be called with arbitrary ioctls and buffers to test functi
 
 
 ## Version
-2.2.3  
-Last changed: 14.07.2026
+2.2.4  
+Last changed: 15.09.2026
 
 ## Contents
 * [Requirements](#requirements)
@@ -40,7 +40,7 @@ $ Talk.exe /n DeviceName
            [/is|/ir|/ip|/os|/or|/op <size>] 
            [/ipc|/opc <pattern> <size>] 
            [/i|o(x|b|w|d|q|a|u) <data>] 
-           [/if|/of <file>] "
+           [/if|/of <file>]
            [/s sleep] 
            [/da <flags>] 
            [/sa <flags>] 
@@ -94,6 +94,7 @@ $ Talk.exe /n DeviceName
 - /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x12019f
 - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x3
 - /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x10) times for multiple privileges.
+- /fobp Force printing of the output buffer, even in an error case.
 
 **Printing style for output buffer**
 - /pb Print plain space separated bytes
@@ -120,7 +121,7 @@ The resulting input size would be 8 bytes, equal to the first example.
 The order the integers are given in does matter.
 
 The custom `<pattern>` of `/ipc` (`/opc`) is interpreted as a byte string, 
-i.e. the input of `/ipc 414243 10` will result to a 10 byte long input data of `41 42 43 41 42 44 41 42 45 41`.
+  i.e. the input of `/ipc 414243 10` will result to a 10 byte long input data of `41 42 43 41 42 44 41 42 45 41`.
 
 
 ### Examples

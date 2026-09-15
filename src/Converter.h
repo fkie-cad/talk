@@ -179,7 +179,7 @@ int parseUint64(const char* arg, ULONGLONG* value, UINT8 base)
 #endif
     err_no = errno;
 
-    if ( endptr == arg )
+    if ( endptr == arg || *endptr != '\0' )
     {
         fprintf(stderr, "Error: %s could not be converted to a number: Not a number!\n", arg);
         return 3;
@@ -187,6 +187,43 @@ int parseUint64(const char* arg, ULONGLONG* value, UINT8 base)
     if ( result == (ULONGLONG)-1 && err_no == ERANGE )
     {
         fprintf(stderr, "Error: %s could not be converted to a number: Out of range!\n", arg);
+        return 4;
+    }
+
+    *value = result;
+    return 0;
+}
+
+int parseUint32(const char* arg, ULONG* value, UINT8 base)
+{
+    char* endptr;
+    int err_no = 0;
+    errno = 0;
+    ULONG result;
+
+    if ( base != 10 && base != 16 && base != 0 )
+    {
+        EPrint("Unsupported base %u!\n", base);
+        return 1;
+    }
+
+    if ( arg[0] ==  '-' )
+    {
+        EPrint("\"%s\" could not be converted to a number: is negative!\n", arg);
+        return 2;
+    }
+
+    result = strtoul(arg, &endptr, base);
+    err_no = errno;
+
+    if ( endptr == arg || *endptr != '\0' )
+    {
+        EPrint("\"%s\" could not be converted to a number: Not a number!\n", arg);
+        return 3;
+    }
+    if ( result == (ULONG)-1 && err_no == ERANGE )
+    {
+        EPrint("\"%s\" could not be converted to a number: Out of range!\n", arg);
         return 4;
     }
 

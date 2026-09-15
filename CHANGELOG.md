@@ -1,6 +1,11 @@
 # Change Log
 
 
+## v2.2.6 - 2026/09/15
+
+- Fill byte selection for input and output buffer.
+
+
 ## v2.2.5 - 2026/09/15
 
 - Wide unicode char printing restricted to ASCII only for simplicity.

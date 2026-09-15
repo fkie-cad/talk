@@ -230,7 +230,6 @@ void PrintMemBytes(PVOID _b_, SIZE_T _s_)
     {
         printf("%02x ", ((PUINT8)_b_)[_i_]);
     }
-    printf("\n");
 }
 
 FORCEINLINE
@@ -240,7 +239,6 @@ void PrintMemByteStr(PVOID _b_, SIZE_T _s_)
     {
         printf("%02x", ((PUINT8)_b_)[_i_]);
     }
-    printf("\n");
 }
 
 FORCEINLINE

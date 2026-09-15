@@ -5,7 +5,7 @@ Arbitrary devices can be called with arbitrary ioctls and buffers to test functi
 
 
 ## Version
-2.2.5  
+2.2.6  
 Last changed: 15.09.2026
 
 ## Contents
@@ -45,6 +45,9 @@ $ Talk.exe /n DeviceName
            [/da <flags>] 
            [/sa <flags>] 
            [/se <priv>] 
+           [/fobp]
+           [/ibfb <value>]
+           [/obfb <value>]
            [/t] 
            [/pb|pbs|pc8|pc16|pc32|pc64|pc1|pa|pu]
            [/v] 
@@ -69,12 +72,12 @@ $ Talk.exe /n DeviceName
 - /ir Input data will be filled with \<size\> random bytes.
 - /ip Input data will be filled with \<size\> default pattern bytes (Aa0Aa1...).
 - /ipc Input data will be filled with \<size\> custom pattern bytes, starting from \<pattern\>, incremented by 1.
-- /is Input data will be filled with \<size\> 'A's.
+- /is Input data will be filled with \<size\> 0x41 or another fill byte (/ibfb).
 
 **Output Data:**  
 (Sometimes the output buffer might need to be filled as well.)  
 (The integer types are [chainable](#remarks).)  
-- /os Size of OutputBuffer to be filled with zeros. (Most common option.)
+- /os Size of OutputBuffer to be filled with \<size\> 0x0 or another fill byte (/obfb).
 - /ox \<data\> as hex byte string.
 - /ob \<data\> as byte.
 - /ow \<data\> as word (uint16).
@@ -95,6 +98,8 @@ $ Talk.exe /n DeviceName
 - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x3
 - /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x10) times for multiple privileges.
 - /fobp Force printing of the output buffer, even in an error case.
+- /ibfb Fill byte value for the input buffer. Default 0x41.
+- /obfb Fill byte value for the output buffer. Default 0x0.
 
 **Printing style for output buffer**
 - /pb Print plain space separated bytes

@@ -20,7 +20,7 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.2.5"
+#define VERSION "2.2.6"
 #define LAST_CHANGED "15.09.2026"
 
 
@@ -38,7 +38,8 @@
 #define PRINT_MODE_MAX  PRINT_MODE_UNICODE 
 
 #define DEFAULT_DA (FILE_GENERIC_READ|FILE_GENERIC_WRITE)
-#define DEFAULT_FILL_VALUE ('A')
+#define DEFAULT_IB_FILL_BYTE (0x41)
+#define DEFAULT_OB_FILL_BYTE (0x0)
 
 #define MAX_SE_COUNT (0x10)
 
@@ -65,7 +66,8 @@ typedef struct CmdParams {
         ULONG Reserved:26;
     } Flags;
     BOOL TestHandle;
-    CHAR FillValue;
+    UINT8 InputBufferFillByte;
+    UINT8 OutputBufferFillByte;
 } CmdParams, * PCmdParams;
 
 
@@ -322,9 +324,11 @@ DISABLE_WARNING ( 6385 )
         {
             case PRINT_MODE_BYTES:
                 PrintMemBytes(outputBuffer, bytesReturned);
+                printf("\n");
                 break;
             case PRINT_MODE_BYTE_STR:
                 PrintMemByteStr(outputBuffer, bytesReturned);
+                printf("\n");
                 break;
             case PRINT_MODE_COLS_16:
                 PrintMemCols16(outputBuffer, bytesReturned, 0);
@@ -360,16 +364,6 @@ clean:
         NtClose(event);
 
     return status;
-}
-
-#define STR_TO_ULONG(__out__, __val__, __s__) \
-{ \
-    __s__ = parseUint32((__val__), &(__out__), 0); \
-}
-
-#define STR_TO_ULONG_X(__out__, __val__, __s__) \
-{ \
-    __s__ = parseUint32((__val__), &(__out__), 16); \
 }
 
 #define CONTINUE_IF_ID_SET(__id__, __i__) \
@@ -435,7 +429,8 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
     ZeroMemory(Params, sizeof(CmdParams));
     Params->DesiredAccess = DEFAULT_DA;
     Params->ShareAccess = FILE_SHARE_READ|FILE_SHARE_WRITE;
-    Params->FillValue = DEFAULT_FILL_VALUE;
+    Params->InputBufferFillByte = DEFAULT_IB_FILL_BYTE;
+    Params->OutputBufferFillByte = DEFAULT_OB_FILL_BYTE;
 
     for ( i = start_i; i < last_i; i++ )
     {
@@ -456,7 +451,9 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         {
             BREAK_ON_NOT_A_VALUE(val1, s, "[e] No ioctl code set!\n");
   
-            STR_TO_ULONG_X(Params->IoCtl, val1, s);
+            s = parseUint32(val1, &Params->IoCtl, 0x10);
+            if ( s != 0 )
+                break;
 
             i++;
         }
@@ -612,7 +609,9 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
             
             CONTINUE_IF_ID_SET(Params->InputBufferData, i);
 
-            STR_TO_ULONG(Params->InputBufferSize, val1, s);
+            s = parseUint32(val1, &Params->InputBufferSize, 0);
+            if ( s != 0 )
+                break;
 
             i++;
         }
@@ -765,7 +764,9 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
 
             CONTINUE_IF_OD_SET(Params->OutputBufferData, i);
 
-            STR_TO_ULONG(Params->OutputBufferSize, val1, s);
+            s = parseUint32(val1, &Params->OutputBufferSize, 0);
+            if ( s != 0 )
+                break;
 
             i++;
         }
@@ -776,7 +777,9 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         {
             BREAK_ON_NOT_A_VALUE(val1, s, "[e] No desired access flag set!\n");
 
-            STR_TO_ULONG(Params->DesiredAccess, val1, s);
+            s = parseUint32(val1, &Params->DesiredAccess, 0);
+            if ( s != 0 )
+                break;
 
             i++;
         }
@@ -784,7 +787,9 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         {
             BREAK_ON_NOT_A_VALUE(val1, s, "[e] No sleep length set!\n");
 
-            STR_TO_ULONG(Params->Sleep, val1, s);
+            s = parseUint32(val1, &Params->Sleep, 0);
+            if ( s != 0 )
+                break;
 
             i++;
         }
@@ -792,7 +797,9 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         {
             BREAK_ON_NOT_A_VALUE(val1, s, "[e] No shareAccess flag set!\n");
 
-            STR_TO_ULONG(Params->ShareAccess, val1, s);
+            s = parseUint32(val1, &Params->ShareAccess, 0);
+            if ( s != 0 )
+                break;
 
             i++;
         }
@@ -854,6 +861,24 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         {
             Params->Flags.ForceOutBufPrint = 1;
         }
+        else if ( IS_4C_ARG(arg, 'ibfb') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No fill byte set!\n");
+
+            s = parseUint8(val1, &Params->InputBufferFillByte, 0x10);
+
+            i++;
+        }
+        else if ( IS_4C_ARG(arg, 'obfb') )
+        {
+            BREAK_ON_NOT_A_VALUE(val1, s, "[e] No fill byte set!\n");
+
+            s = parseUint8(val1, &Params->OutputBufferFillByte, 0x10);
+            if ( s != 0 )
+                break;
+
+            i++;
+        }
         else if ( IS_1C_ARG(arg, 'v') )
         {
             Params->Flags.Verbose = 1;
@@ -888,13 +913,13 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         goto clean;
     }
 
-    // fill input with a fill value, if just /is has been set
-    s = parseIOBSize(&Params->InputBufferData, Params->InputBufferSize, Params->FillValue);
+    // fill input with a fill byte, if just /is has been set
+    s = parseIOBSize(&Params->InputBufferData, Params->InputBufferSize, Params->InputBufferFillByte);
     if ( s != 0 )
         goto clean;
 
-    // fill output with a 0, if just /os has been set
-    s = parseIOBSize(&Params->OutputBufferData, Params->OutputBufferSize, 0);
+    // fill output with a fill byte, if just /os has been set
+    s = parseIOBSize(&Params->OutputBufferData, Params->OutputBufferSize, Params->OutputBufferFillByte);
     if ( s != 0 )
         goto clean;
 
@@ -959,19 +984,28 @@ void printArgs(_In_ PCmdParams Params)
     if ( Params->InputBufferData )
     {
         printf(" - InputBufferData:\n");
-        PrintMemBytes(Params->InputBufferData, Params->InputBufferSize);
+        SIZE_T printSize = min(Params->InputBufferSize, 0x100);
+        PrintMemBytes(Params->InputBufferData, printSize);
+        if ( printSize < Params->InputBufferSize)
+            printf("[...]");
+        printf("\n");
     }
     printf(" - OutputBufferSize: 0x%x\n", Params->OutputBufferSize);
     if ( Params->OutputBufferData )
     {
         printf(" - OutputBufferData:\n");
-        PrintMemBytes(Params->OutputBufferData, Params->OutputBufferSize);
+        SIZE_T printSize = min(Params->OutputBufferSize, 0x100);
+        PrintMemBytes(Params->OutputBufferData, printSize);
+        if ( printSize < Params->OutputBufferSize)
+            printf("[...]");
+        printf("\n");
     }
     printf(" - Sleep: 0x%x\n", Params->Sleep);
     printf(" - TestHandle: %d\n", Params->TestHandle);
     printf(" - DesiredAccess: 0x%x\n", Params->DesiredAccess);
     printf(" - ShareAccess: 0x%x\n", Params->ShareAccess);
-    printf(" - FillValue: 0x%x\n", Params->FillValue);
+    printf(" - InputBufferFillByte: 0x%x\n", Params->InputBufferFillByte);
+    printf(" - OutputBufferFillByte: 0x%x\n", Params->OutputBufferFillByte);
     printf("\n");
 }
 
@@ -995,6 +1029,9 @@ void printUsage()
            "[/da <flags>] "
            "[/sa <flags>] "
            "[/se <priv>] "
+           "[/fobp] "
+           "[/ibfb <value>] "
+           "[/obfb <value>] "
            "[/t] "
            "[/v] "
            "[/pb|pbs|pc8|pc16|pc32|pc64|pc1|pa|pu] "
@@ -1025,11 +1062,11 @@ void printHelp()
     printf("    * /ir Input data will be filled with <size> random bytes.\n");
     printf("    * /ip Input data will be filled with <size> default pattern bytes (Aa0Aa1...).\n");
     printf("    * /ipc Input data will be filled with <size> custom pattern bytes, starting from <pattern>, incremented by 1.\n");
-    printf("    * /is Input data will be filled with <size> 'A's.\n");
+    printf("    * /is Input data will be filled with <size> 0x41 or another fill byte (/ibfb).\n");
     printf(" - Output Data:\n");
     printf("    (Sometimes the output buffer might need to be filled as well.)\n");
     printf("    (The integer types are chainable.)\n");
-    printf("    * /os Size of OutputBuffer to be filled with zeros. (Most common option.)\n");
+    printf("    * /os Size of OutputBuffer to be filled with <size> 0 or another fill byte (/obfb).\n");
     printf("    * /ox <Data> as hex byte string.\n");
     printf("    * /ob <Data> as byte.\n");
     printf("    * /ow <Data> as word (uint16).\n");
@@ -1047,6 +1084,8 @@ void printHelp()
     printf(" - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x%x.\n", (FILE_SHARE_READ|FILE_SHARE_WRITE));
     printf(" - /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x%x) times for multiple privileges.\n", MAX_SE_COUNT);
     printf(" - /fobp Force printing of the output buffer, even in an error case.\n");
+    printf(" - /ibfb Fill byte value for the input buffer. Default 0x%x.\n", DEFAULT_IB_FILL_BYTE);
+    printf(" - /obfb Fill byte value for the output buffer. Default 0x%x.\n", DEFAULT_OB_FILL_BYTE);
     printf(" - Printing style for output buffer:\n");
     printf("    * /pb Print in plain space separated bytes.\n");
     printf("    * /pbs Print in plain byte string.\n");

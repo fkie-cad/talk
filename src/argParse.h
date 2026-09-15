@@ -319,7 +319,7 @@ FORCEINLINE
 INT parseIOBSize(_Inout_ PVOID* Buffer, _In_ ULONG BufferSize, _In_ UINT8 FillValue)
 {
     INT s = 0;
-
+    
     if ( BufferSize > 0 && !(*Buffer) )
     {
         (*Buffer) = malloc(BufferSize);
@@ -331,7 +331,7 @@ INT parseIOBSize(_Inout_ PVOID* Buffer, _In_ ULONG BufferSize, _In_ UINT8 FillVa
         }
         memset((*Buffer), FillValue, BufferSize);
     }
-
+    
 clean:
     return s;
 }

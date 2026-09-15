@@ -18,44 +18,43 @@ UINT32 countHexChars(UINT64 Value)
 }
 
 FORCEINLINE
-SIZE_T getNrOfPages(SIZE_T Size, SIZE_T Mpp)
+SIZE_T getNrOfPages(SIZE_T Size, SIZE_T LastPageBytes)
 {
     SIZE_T n = 0;
-    if ( Size <= Mpp ) 
+    if ( Size <= LastPageBytes ) 
     {
         n = 1;
     }
     else
     {
-        n = Size - Mpp;
-        n = ALIGN_DOWN_TO_LAST_BY(n, PAGE_SIZE);
+        n = Size - LastPageBytes;
+        n = ALIGN_DOWN_TO_PREV_BY(n, PAGE_SIZE);
         n = ( n / PAGE_SIZE ) + 2;
     }
     return n;
 }
 
 FORCEINLINE
-SIZE_T getBufferOffset(SIZE_T Size, SIZE_T Mpp)
+SIZE_T getBufferOffset(SIZE_T Size, SIZE_T LastPageBytes)
 {
     SIZE_T offset = 0;
-    if ( Size <= Mpp ) 
+    if ( Size <= LastPageBytes ) 
     {
         offset = 0;
     }
     else
     {
-        offset = Size % PAGE_SIZE;
-        offset = PAGE_SIZE - offset + Mpp;
+        offset = ( PAGE_SIZE + LastPageBytes - ( Size % PAGE_SIZE ) ) % PAGE_SIZE;
     }
     return offset;
 }
 
 //
-// allocate buffer aligned buffer.
-// The buffer reaches max Mpp bytes into a new page.
+// allocate page aligned buffer.
+// The buffer reaches max LastPageBytes bytes into a new page.
 // This should maximize the amount of memory accessible beyond the buffer not crossing a page border.
 //
-PVOID allocCMPL(SIZE_T Size, PVOID* Base, SIZE_T Mpp)
+PVOID allocCMPL(SIZE_T Size, PVOID* Base, SIZE_T LastPageBytes)
 {
     FEnter();
 
@@ -67,7 +66,7 @@ PVOID allocCMPL(SIZE_T Size, PVOID* Base, SIZE_T Mpp)
     SIZE_T zeroBits = 0;
     SIZE_T regionSize = 0;
     
-    SIZE_T nrOfPages = getNrOfPages(Size, Mpp);
+    SIZE_T nrOfPages = getNrOfPages(Size, LastPageBytes);
     DPrint("nrOfPages: 0x%zx\n", nrOfPages);
 
     *Base = 0;
@@ -92,7 +91,7 @@ PVOID allocCMPL(SIZE_T Size, PVOID* Base, SIZE_T Mpp)
     DPrint("regionSize: 0x%zx\n", regionSize);
 
     *Base = baseAddress;
-    bufferAddress = (PVOID)((SIZE_T)baseAddress + getBufferOffset(Size, Mpp));
+    bufferAddress = (PVOID)((SIZE_T)baseAddress + getBufferOffset(Size, LastPageBytes));
 
 clean:
 

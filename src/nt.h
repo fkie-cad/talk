@@ -1,7 +1,8 @@
 #pragma once
 
+#ifndef PAGE_SIZE
 #define PAGE_SIZE (0x1000)
-
+#endif
 
 #ifndef ALIGN_UP_TO_NEXT_BY
 #define ALIGN_UP_TO_NEXT_BY(Address, Align) ( (((Align)-1)&((ULONG_PTR)(Address))) ? ( ((ULONG_PTR)(Address) + (ULONG_PTR)(Align) - 1) & ~((ULONG_PTR)(Align) - 1) ) : ((ULONG_PTR)(Address)+(Align)) )
@@ -15,8 +16,8 @@
 #define ALIGN_DOWN_BY(Address, Align) ((ULONG_PTR)(Address) & ~((ULONG_PTR)(Align) - 1))
 #endif
 
-#ifndef ALIGN_DOWN_TO_LAST_BY
-#define ALIGN_DOWN_TO_LAST_BY(Address, Align) ( !((ULONG_PTR)(Address)) ? 0 : (((Align)-1)&((ULONG_PTR)(Address))) ? ((ULONG_PTR)(Address) & ~((ULONG_PTR)(Align) - 1)) : ((ULONG_PTR)(Address)-(Align)) )
+#ifndef ALIGN_DOWN_TO_PREV_BY
+#define ALIGN_DOWN_TO_PREV_BY(Address, Align) ( !((ULONG_PTR)(Address)) ? 0 : (((Align)-1)&((ULONG_PTR)(Address))) ? ((ULONG_PTR)(Address) & ~((ULONG_PTR)(Align) - 1)) : ((ULONG_PTR)(Address)-(Align)) )
 #endif
 
 

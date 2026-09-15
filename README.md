@@ -5,7 +5,7 @@ Arbitrary devices can be called with arbitrary ioctls and buffers to test functi
 
 
 ## Version
-2.2.7  
+2.2.8  
 Last changed: 15.09.2026
 
 ## Contents
@@ -46,7 +46,7 @@ $ Talk.exe /n DeviceName
            [/sa <flags>] 
            [/se <priv>] 
            [/fobp]
-           [/ofao]
+           [/oboa]
            [/ibfb <value>]
            [/obfb <value>]
            [/t] 
@@ -99,7 +99,7 @@ $ Talk.exe /n DeviceName
 - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x3
 - /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x10) times for multiple privileges.
 - /fobp Force printing of the output buffer, even in an error case.
-- /ofao Aligns output buffer to maximal reach 0x10 bytes into a page.
+- /oboa Page align the output buffer, so that it ends 0x10 bytes into its last page, to survive an overflow within the page.
 - /ibfb Fill byte value for the input buffer. Default 0x41.
 - /obfb Fill byte value for the output buffer. Default 0x0.
 
@@ -117,6 +117,7 @@ $ Talk.exe /n DeviceName
 **Misc**
 - /v More verbose output.
 
+
 ### Remarks
 A sleep (`/s`) may be useful with asynchronous calls like Beep.  
 
@@ -129,6 +130,10 @@ The order the integers are given in does matter.
 
 The custom `<pattern>` of `/ipc` (`/opc`) is interpreted as a byte string, 
   i.e. the input of `/ipc 414243 10` will result to a 10 byte long input data of `41 42 43 41 42 44 41 42 45 41`.
+
+The `/oboa` page aligns the output buffer, so that it ends 0x10 bytes into its last page.
+By leaving `0x1000 - 0x10 = 0xff0` writable bytes behind the buffer on the same page, 
+  it maximizes the possibility to survive an overflow without crossing a page boundary.
 
 
 ### Examples

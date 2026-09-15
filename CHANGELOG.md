@@ -1,6 +1,13 @@
 # Change Log
 
 
+## v2.2.8 - 2026/09/15
+
+- Fixed buffer alignment offset bug.
+- Fixed missing buffer alignment copying of the old buffer.
+- Fixed missing arg parsing error check.
+- Renaming.
+
 ## v2.2.7 - 2026/09/15
 
 - Alignment of output buffer for maximal bytes left on page.

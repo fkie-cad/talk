@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <strsafe.h>
 
-// maximal size of to overlap into another page
-#define MAX_PAGE_POPULATION (0x10)
+// max number of bytes the output buffer may occupy in its last page
+#define MAX_LAST_PAGE_BYTES (0x10)
 
 #include "nt.h"
 #include "print.h"
@@ -23,7 +23,7 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.2.7"
+#define VERSION "2.2.8"
 #define LAST_CHANGED "15.09.2026"
 
 
@@ -67,7 +67,7 @@ typedef struct CmdParams {
         ULONG Verbose:1;
         ULONG PrintMode:4;
         ULONG ForceOutBufferPrint:1;
-        ULONG OverFlowAlignedBuffer:1;
+        ULONG OutputBufferOverflowAlign:1;
         ULONG Reserved:25;
     } Flags;
     BOOL TestHandle;
@@ -873,15 +873,17 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         {
             Params->Flags.ForceOutBufferPrint = 1;
         }
-        else if ( IS_4C_ARG(arg, 'ofao') )
+        else if ( IS_4C_ARG(arg, 'oboa') )
         {
-            Params->Flags.OverFlowAlignedBuffer = 1;
+            Params->Flags.OutputBufferOverflowAlign = 1;
         }
         else if ( IS_4C_ARG(arg, 'ibfb') )
         {
             BREAK_ON_NOT_A_VALUE(val1, s, "[e] No fill byte set!\n");
 
             s = parseUint8(val1, &Params->InputBufferFillByte, 0x10);
+            if ( s != 0 )
+                break;
 
             i++;
         }
@@ -941,19 +943,21 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
 
     // if flagged
     // relocate output buffer to special page alignment for overflow kindness
-    if ( Params->Flags.OverFlowAlignedBuffer && Params->OutputBufferSize > 0 && Params->OutputBufferData )
+    if ( Params->Flags.OutputBufferOverflowAlign && Params->OutputBufferSize > 0 && Params->OutputBufferData )
     {
         PVOID base = NULL;
         PVOID buffer = NULL;
         DPrint("realigning buffer: %p\n", Params->OutputBufferData);
-        buffer = allocCMPL(Params->OutputBufferSize, &base, MAX_PAGE_POPULATION);
+        buffer = allocCMPL(Params->OutputBufferSize, &base, MAX_LAST_PAGE_BYTES);
         if ( !buffer )
         {
-            EPrint("realigning buffer failed!\n");
+            s = ERROR_NO_SYSTEM_RESOURCES;
+            EPrint("realigning buffer failed! (0x%x)\n", s);
             goto clean;
         }
         DPrint("  base: %p\n", base);
         DPrint("  buffer: %p\n", buffer);
+        memcpy(buffer, Params->OutputBufferData, Params->OutputBufferSize);
         free(Params->OutputBufferData);
         Params->OutputBufferData = buffer;
         Params->OutputBufferBase = base;
@@ -1036,6 +1040,11 @@ void printArgs(_In_ PCmdParams Params)
             printf("[...]");
         printf("\n");
     }
+    if ( Params->Flags.OutputBufferOverflowAlign )
+    {
+        printf(" - OutputBuffer: %p\n", Params->OutputBufferData);
+        printf(" - OutputBufferBase: %p\n", Params->OutputBufferBase);
+    }
     printf(" - Sleep: 0x%x\n", Params->Sleep);
     printf(" - TestHandle: %d\n", Params->TestHandle);
     printf(" - DesiredAccess: 0x%x\n", Params->DesiredAccess);
@@ -1066,7 +1075,7 @@ void printUsage()
            "[/sa <flags>] "
            "[/se <priv>] "
            "[/fobp] "
-           "[/ofao] "
+           "[/oboa] "
            "[/ibfb <value>] "
            "[/obfb <value>] "
            "[/t] "
@@ -1121,7 +1130,7 @@ void printHelp()
     printf(" - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x%x.\n", (FILE_SHARE_READ|FILE_SHARE_WRITE));
     printf(" - /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x%x) times for multiple privileges.\n", MAX_SE_COUNT);
     printf(" - /fobp Force printing of the output buffer, even in an error case.\n");
-    printf(" - /ofao Aligns output buffer to maximal reach 0x%x bytes into a page.\n", MAX_PAGE_POPULATION);
+    printf(" - /oboa Page align the output buffer, so that it ends 0x%x bytes into its last page, to survive an overflow within the page.\n", MAX_LAST_PAGE_BYTES);
     printf(" - /ibfb Fill byte value for the input buffer. Default 0x%x.\n", DEFAULT_IB_FILL_BYTE);
     printf(" - /obfb Fill byte value for the output buffer. Default 0x%x.\n", DEFAULT_OB_FILL_BYTE);
     printf(" - Printing style for output buffer:\n");

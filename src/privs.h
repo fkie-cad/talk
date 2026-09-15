@@ -23,7 +23,7 @@ NTSTATUS setPrivileges(
         TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
         &token
     );
-    if ( !NT_SUCCESS(status) )
+    if ( status != 0 )
     {
         EPrint("NtOpenProcessToken failed! (0x%x)\n", status);
         return status;

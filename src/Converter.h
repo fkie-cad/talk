@@ -231,6 +231,43 @@ int parseUint32(const char* arg, ULONG* value, UINT8 base)
     return 0;
 }
 
+int parseUint8(const char* arg, UINT8* value, UINT8 base)
+{
+    char* endptr;
+    int err_no = 0;
+    errno = 0;
+    ULONG result;
+
+    if ( base != 10 && base != 16 && base != 0 )
+    {
+        EPrint("Unsupported base %u!\n", base);
+        return 1;
+    }
+
+    if ( arg[0] ==  '-' )
+    {
+        EPrint("\"%s\" could not be converted to a number: is negative!\n", arg);
+        return 2;
+    }
+
+    result = strtoul(arg, &endptr, base);
+    err_no = errno;
+
+    if ( endptr == arg || *endptr != '\0' )
+    {
+        EPrint("\"%s\" could not be converted to a number: Not a number!\n", arg);
+        return 3;
+    }
+    if ( ( result == (ULONG)-1 && err_no == ERANGE ) || result > MAXUINT8 )
+    {
+        EPrint("\"%s\" could not be converted to a number: Out of range!\n", arg);
+        return 4;
+    }
+
+    *value = (UINT8)result;
+    return 0;
+}
+
 uint16_t swapUint16(uint16_t value)
 {
     return (((value & 0x00FFu) << 8u) |

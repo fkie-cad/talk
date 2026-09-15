@@ -1,5 +1,25 @@
 #pragma once
 
+#define PAGE_SIZE (0x1000)
+
+
+#ifndef ALIGN_UP_TO_NEXT_BY
+#define ALIGN_UP_TO_NEXT_BY(Address, Align) ( (((Align)-1)&((ULONG_PTR)(Address))) ? ( ((ULONG_PTR)(Address) + (ULONG_PTR)(Align) - 1) & ~((ULONG_PTR)(Align) - 1) ) : ((ULONG_PTR)(Address)+(Align)) )
+#endif
+
+#ifndef ALIGN_UP_BY
+#define ALIGN_UP_BY(Address, Align) ( ((ULONG_PTR)(Address) + (ULONG_PTR)(Align) - 1) & ~((ULONG_PTR)(Align) - 1) )
+#endif
+
+#ifndef ALIGN_DOWN_BY
+#define ALIGN_DOWN_BY(Address, Align) ((ULONG_PTR)(Address) & ~((ULONG_PTR)(Align) - 1))
+#endif
+
+#ifndef ALIGN_DOWN_TO_LAST_BY
+#define ALIGN_DOWN_TO_LAST_BY(Address, Align) ( !((ULONG_PTR)(Address)) ? 0 : (((Align)-1)&((ULONG_PTR)(Address))) ? ((ULONG_PTR)(Address) & ~((ULONG_PTR)(Align) - 1)) : ((ULONG_PTR)(Address)-(Align)) )
+#endif
+
+
 #define STATUS_SUCCESS                       ((NTSTATUS)0x00000000L)
 #define STATUS_NOT_IMPLEMENTED               ((NTSTATUS)0xC0000002L)
 #define STATUS_NO_SUCH_DEVICE                ((NTSTATUS)0xC000000EL)
@@ -141,3 +161,28 @@ RtlConvertUlongToLuid(
 
     return tempLuid;
 }
+
+NTSTATUS
+NtAllocateVirtualMemory(
+    _In_ HANDLE ProcessHandle,
+    _Inout_ _At_(*BaseAddress, _Readable_bytes_(*RegionSize) _Writable_bytes_(*RegionSize) _Post_readable_byte_size_(*RegionSize)) PVOID *BaseAddress,
+    _In_ ULONG_PTR ZeroBits,
+    _Inout_ PSIZE_T RegionSize,
+    _In_ ULONG AllocationType,
+    _In_ ULONG Protect);
+
+NTSTATUS
+NtProtectVirtualMemory(
+    _In_ HANDLE ProcessHandle,
+    _Inout_ PVOID *BaseAddress,
+    _Inout_ PSIZE_T RegionSize,
+    _In_ ULONG NewProtect,
+    _Out_ PULONG OldProtect);
+
+NTSTATUS
+NtFreeVirtualMemory(
+    _In_ HANDLE ProcessHandle,
+    _Inout_ PVOID *BaseAddress,
+    _Inout_ PSIZE_T RegionSize,
+    _In_ ULONG FreeType);
+

@@ -5,7 +5,7 @@ Arbitrary devices can be called with arbitrary ioctls and buffers to test functi
 
 
 ## Version
-2.2.6  
+2.2.7  
 Last changed: 15.09.2026
 
 ## Contents
@@ -46,6 +46,7 @@ $ Talk.exe /n DeviceName
            [/sa <flags>] 
            [/se <priv>] 
            [/fobp]
+           [/ofao]
            [/ibfb <value>]
            [/obfb <value>]
            [/t] 
@@ -98,6 +99,7 @@ $ Talk.exe /n DeviceName
 - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x3
 - /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x10) times for multiple privileges.
 - /fobp Force printing of the output buffer, even in an error case.
+- /ofao Aligns output buffer to maximal reach 0x10 bytes into a page.
 - /ibfb Fill byte value for the input buffer. Default 0x41.
 - /obfb Fill byte value for the output buffer. Default 0x0.
 

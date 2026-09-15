@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <strsafe.h>
 
+// maximal size of to overlap into another page
+#define MAX_PAGE_POPULATION (0x10)
+
 #include "nt.h"
 #include "print.h"
 #include "Args.h"
@@ -20,7 +23,7 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.2.6"
+#define VERSION "2.2.7"
 #define LAST_CHANGED "15.09.2026"
 
 
@@ -54,6 +57,7 @@ typedef struct CmdParams {
     ULONG OutputBufferSize;
     PUINT8 InputBufferData;
     PUINT8 OutputBufferData;
+    PUINT8 OutputBufferBase;
     ULONG IoCtl;
     ULONG Sleep;
     ACCESS_MASK DesiredAccess;
@@ -62,8 +66,9 @@ typedef struct CmdParams {
     struct {
         ULONG Verbose:1;
         ULONG PrintMode:4;
-        ULONG ForceOutBufPrint:1;
-        ULONG Reserved:26;
+        ULONG ForceOutBufferPrint:1;
+        ULONG OverFlowAlignedBuffer:1;
+        ULONG Reserved:25;
     } Flags;
     BOOL TestHandle;
     UINT8 InputBufferFillByte;
@@ -171,8 +176,15 @@ clean:
         free(params.Se.List);
     if ( params.InputBufferData )
         free(params.InputBufferData);
-    if ( params.OutputBufferData )
+    if ( params.OutputBufferBase )
+    {
+        SIZE_T size = 0;
+        NtFreeVirtualMemory((HANDLE)-1, &params.OutputBufferBase, &size, MEM_RELEASE);
+    }
+    else if ( params.OutputBufferData )
+    {
         free(params.OutputBufferData);
+    }
     
     if ( device )
         NtClose(device);
@@ -269,7 +281,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
 
         // skip output buffer printing in error case, if not forced to print
         // the output buffer of warnings should be printed anyway
-        if ( NT_ERROR(status) && !Params->Flags.ForceOutBufPrint )
+        if ( NT_ERROR(status) && !Params->Flags.ForceOutBufferPrint )
             goto clean;
     }
 
@@ -859,7 +871,11 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_4C_ARG(arg, 'fobp') )
         {
-            Params->Flags.ForceOutBufPrint = 1;
+            Params->Flags.ForceOutBufferPrint = 1;
+        }
+        else if ( IS_4C_ARG(arg, 'ofao') )
+        {
+            Params->Flags.OverFlowAlignedBuffer = 1;
         }
         else if ( IS_4C_ARG(arg, 'ibfb') )
         {
@@ -922,6 +938,26 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
     s = parseIOBSize(&Params->OutputBufferData, Params->OutputBufferSize, Params->OutputBufferFillByte);
     if ( s != 0 )
         goto clean;
+
+    // if flagged
+    // relocate output buffer to special page alignment for overflow kindness
+    if ( Params->Flags.OverFlowAlignedBuffer && Params->OutputBufferSize > 0 && Params->OutputBufferData )
+    {
+        PVOID base = NULL;
+        PVOID buffer = NULL;
+        DPrint("realigning buffer: %p\n", Params->OutputBufferData);
+        buffer = allocCMPL(Params->OutputBufferSize, &base, MAX_PAGE_POPULATION);
+        if ( !buffer )
+        {
+            EPrint("realigning buffer failed!\n");
+            goto clean;
+        }
+        DPrint("  base: %p\n", base);
+        DPrint("  buffer: %p\n", buffer);
+        free(Params->OutputBufferData);
+        Params->OutputBufferData = buffer;
+        Params->OutputBufferBase = base;
+    }
 
 clean:
 
@@ -1030,6 +1066,7 @@ void printUsage()
            "[/sa <flags>] "
            "[/se <priv>] "
            "[/fobp] "
+           "[/ofao] "
            "[/ibfb <value>] "
            "[/obfb <value>] "
            "[/t] "
@@ -1084,6 +1121,7 @@ void printHelp()
     printf(" - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x%x.\n", (FILE_SHARE_READ|FILE_SHARE_WRITE));
     printf(" - /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x%x) times for multiple privileges.\n", MAX_SE_COUNT);
     printf(" - /fobp Force printing of the output buffer, even in an error case.\n");
+    printf(" - /ofao Aligns output buffer to maximal reach 0x%x bytes into a page.\n", MAX_PAGE_POPULATION);
     printf(" - /ibfb Fill byte value for the input buffer. Default 0x%x.\n", DEFAULT_IB_FILL_BYTE);
     printf(" - /obfb Fill byte value for the output buffer. Default 0x%x.\n", DEFAULT_OB_FILL_BYTE);
     printf(" - Printing style for output buffer:\n");

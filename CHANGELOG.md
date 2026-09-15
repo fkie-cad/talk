@@ -1,6 +1,11 @@
 # Change Log
 
 
+## v2.2.7 - 2026/09/15
+
+- Alignment of output buffer for maximal bytes left on page.
+
+
 ## v2.2.6 - 2026/09/15
 
 - Fill byte selection for input and output buffer.

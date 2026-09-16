@@ -1,6 +1,11 @@
 # Change Log
 
 
+## v2.2.9 - 2026/09/15
+- Fixed output buffer printing size bug.
+- Forced `/fobp` to always print the output buffer by its size, not using `iosb.Information`.
+- Refactoring
+
 ## v2.2.8 - 2026/09/15
 
 - Fixed buffer alignment offset bug.
@@ -10,7 +15,7 @@
 
 ## v2.2.7 - 2026/09/15
 
-- Alignment of output buffer for maximal bytes left on page.
+- Alignment of output buffer to maximize bytes left on page.
 
 
 ## v2.2.6 - 2026/09/15

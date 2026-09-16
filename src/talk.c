@@ -23,8 +23,8 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.2.8"
-#define LAST_CHANGED "15.09.2026"
+#define VERSION "2.2.9"
+#define LAST_CHANGED "16.09.2026"
 
 
 #define PRINT_MODE_NONE         (0x00) // 0000
@@ -41,6 +41,7 @@
 #define PRINT_MODE_MAX  PRINT_MODE_UNICODE 
 
 #define DEFAULT_DA (FILE_GENERIC_READ|FILE_GENERIC_WRITE)
+#define DEFAULT_SA (FILE_SHARE_READ|FILE_SHARE_WRITE)
 #define DEFAULT_IB_FILL_BYTE (0x41)
 #define DEFAULT_OB_FILL_BYTE (0x0)
 
@@ -66,7 +67,7 @@ typedef struct CmdParams {
     struct {
         ULONG Verbose:1;
         ULONG PrintMode:4;
-        ULONG ForceOutBufferPrint:1;
+        ULONG ForceOutputBufferPrint:1;
         ULONG OutputBufferOverflowAlign:1;
         ULONG Reserved:25;
     } Flags;
@@ -279,9 +280,9 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
             printf("    iosb info: 0x%08x\n", (ULONG)iosb.Information);
         }
 
-        // skip output buffer printing in error case, if not forced to print
-        // the output buffer of warnings should be printed anyway
-        if ( NT_ERROR(status) && !Params->Flags.ForceOutBufferPrint )
+        // Skip printing of the output buffer in error cases, if not forced to.
+        // The output buffer of warnings should be printed anyway.
+        if ( NT_ERROR(status) && !Params->Flags.ForceOutputBufferPrint )
             goto clean;
     }
 
@@ -296,7 +297,7 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     printf("\n");
     
     bytesReturned = (ULONG)iosb.Information;
-    printf("The driver returned 0x%x bytes:\n", bytesReturned);
+    printf("The driver returned 0x%x bytes.\n", bytesReturned);
 
     if ( bytesReturned > Params->OutputBufferSize )
     {
@@ -312,19 +313,27 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     
     SIZE_T toPrint = 0;
     UINT32 method = METHOD_FROM_CTL_CODE(Params->IoCtl);
-    // use output buffer size, because iosb.Information is not reliable or not filled at all.
-    if ( method == METHOD_NEITHER || method == METHOD_OUT_DIRECT )
+    DPrint("method: 0x%x\n", method);
+    // use output buffer size, because 
+    // - iosb.Information is not reliable, 
+    // - or not filled at all,
+    // - or we are forced to.
+    if ( ( bytesReturned == 0 && ( method == METHOD_NEITHER || method == METHOD_OUT_DIRECT )) || Params->Flags.ForceOutputBufferPrint )
     {
         toPrint = Params->OutputBufferSize;
     }
     else
     {
         // for buffered io, iosb.Information is the only possible buffer size
+        // if not fastio is used
         toPrint = bytesReturned;
     }
+    DPrint("Params->OutputBufferSize: 0x%x\n", Params->OutputBufferSize);
+    DPrint("toPrint: 0x%zx\n", toPrint);
     
     if ( toPrint )
     {
+        printf("Output buffer:\n");
         printf("-----------------------------");
         UINT32 zc = countHexChars(bytesReturned);
         for ( UINT32 zci = 0; zci < zc; zci++ ) printf("-");
@@ -335,33 +344,33 @@ DISABLE_WARNING ( 6385 )
         switch ( Params->Flags.PrintMode )
         {
             case PRINT_MODE_BYTES:
-                PrintMemBytes(outputBuffer, bytesReturned);
+                PrintMemBytes(outputBuffer, toPrint);
                 printf("\n");
                 break;
             case PRINT_MODE_BYTE_STR:
-                PrintMemByteStr(outputBuffer, bytesReturned);
+                PrintMemByteStr(outputBuffer, toPrint);
                 printf("\n");
                 break;
             case PRINT_MODE_COLS_16:
-                PrintMemCols16(outputBuffer, bytesReturned, 0);
+                PrintMemCols16(outputBuffer, toPrint, 0);
                 break;
             case PRINT_MODE_COLS_32:
-                PrintMemCols32(outputBuffer, bytesReturned, 0);
+                PrintMemCols32(outputBuffer, toPrint, 0);
                 break;
             case PRINT_MODE_COLS_64:
-                PrintMemCols64(outputBuffer, bytesReturned, 0);
+                PrintMemCols64(outputBuffer, toPrint, 0);
                 break;
             case PRINT_MODE_COLS_BITS:
-                PrintMemColsBits(outputBuffer, bytesReturned, 0);
+                PrintMemColsBits(outputBuffer, toPrint, 0);
                 break;
             case PRINT_MODE_ASCII:
-                PrintAStr(outputBuffer, bytesReturned);
+                PrintAStr(outputBuffer, toPrint);
                 break;
             case PRINT_MODE_UNICODE:
-                PrintWStr(outputBuffer, bytesReturned);
+                PrintWStr(outputBuffer, toPrint);
                 break;
             default:
-                PrintMemCols8(outputBuffer, bytesReturned, 0);
+                PrintMemCols8(outputBuffer, toPrint, 0);
                 break;
         }
 DEFAULT_WARNING ( 6385 )
@@ -440,7 +449,7 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
     
     ZeroMemory(Params, sizeof(CmdParams));
     Params->DesiredAccess = DEFAULT_DA;
-    Params->ShareAccess = FILE_SHARE_READ|FILE_SHARE_WRITE;
+    Params->ShareAccess = DEFAULT_SA;
     Params->InputBufferFillByte = DEFAULT_IB_FILL_BYTE;
     Params->OutputBufferFillByte = DEFAULT_OB_FILL_BYTE;
 
@@ -871,7 +880,7 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         }
         else if ( IS_4C_ARG(arg, 'fobp') )
         {
-            Params->Flags.ForceOutBufferPrint = 1;
+            Params->Flags.ForceOutputBufferPrint = 1;
         }
         else if ( IS_4C_ARG(arg, 'oboa') )
         {
@@ -1097,7 +1106,7 @@ void printHelp()
     printf(" - /c The desired IOCTL in hex.\n");
     printf(" - Input Data:\n");
     printf("    (The integer types are chainable.)\n");
-    printf("    * /ix <Data> as hex byte string.\n");
+    printf("    * /ix <Data> as hex byte string (e.g. B50DC0DE).\n");
     printf("    * /ib <Data> as byte.\n");
     printf("    * /iw <Data> as word (uint16).\n");
     printf("    * /id <Data> as dword (uint32).\n");
@@ -1113,7 +1122,7 @@ void printHelp()
     printf("    (Sometimes the output buffer might need to be filled as well.)\n");
     printf("    (The integer types are chainable.)\n");
     printf("    * /os Size of OutputBuffer to be filled with <size> 0 or another fill byte (/obfb).\n");
-    printf("    * /ox <Data> as hex byte string.\n");
+    printf("    * /ox <Data> as hex byte string (e.g. BEADC0DE).\n");
     printf("    * /ob <Data> as byte.\n");
     printf("    * /ow <Data> as word (uint16).\n");
     printf("    * /od <Data> as dword (uint32).\n");
@@ -1127,7 +1136,7 @@ void printHelp()
     printf(" - /s Duration of a possible sleep after device io.\n");
     printf(" - /t Just test the device for accessibility. Don't send data.\n");
     printf(" - /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE = 0x%x.\n", DEFAULT_DA);
-    printf(" - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x%x.\n", (FILE_SHARE_READ|FILE_SHARE_WRITE));
+    printf(" - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x%x.\n", DEFAULT_SA);
     printf(" - /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x%x) times for multiple privileges.\n", MAX_SE_COUNT);
     printf(" - /fobp Force printing of the output buffer, even in an error case.\n");
     printf(" - /oboa Page align the output buffer, so that it ends 0x%x bytes into its last page, to survive an overflow within the page.\n", MAX_LAST_PAGE_BYTES);

@@ -5,8 +5,8 @@ Arbitrary devices can be called with arbitrary ioctls and buffers to test functi
 
 
 ## Version
-2.2.8  
-Last changed: 15.09.2026
+2.2.9  
+Last changed: 16.09.2026
 
 ## Contents
 * [Requirements](#requirements)
@@ -62,7 +62,9 @@ $ Talk.exe /n DeviceName
 
 **Input Data**  
 (The integer types are [chainable](#remarks).)  
-- /ix \<data\> as hex byte string.
+- /is Input data will be filled with \<size\> 0x41 or another fill byte (/ibfb).
+- /ibfb Fill byte value for the input buffer. Default 0x41.
+- /ix \<data\> as hex byte string (e.g. B50DC0DE).
 - /ib \<data\> as byte (uint8).
 - /iw \<data\> as word (uint16).
 - /id \<data\> as dword (uint32).
@@ -73,24 +75,23 @@ $ Talk.exe /n DeviceName
 - /ir Input data will be filled with \<size\> random bytes.
 - /ip Input data will be filled with \<size\> default pattern bytes (Aa0Aa1...).
 - /ipc Input data will be filled with \<size\> custom pattern bytes, starting from \<pattern\>, incremented by 1.
-- /is Input data will be filled with \<size\> 0x41 or another fill byte (/ibfb).
 
 **Output Data:**  
 (Sometimes the output buffer might need to be filled as well.)  
 (The integer types are [chainable](#remarks).)  
 - /os Size of OutputBuffer to be filled with \<size\> 0x0 or another fill byte (/obfb).
-- /ox \<data\> as hex byte string.
+- /obfb Fill byte value for the output buffer. Default 0x0.
+- /ox \<data\> as hex byte string (e.g. BEADC0DE).
 - /ob \<data\> as byte.
 - /ow \<data\> as word (uint16).
 - /od \<data\> as dword (uint32).
 - /oq \<data\> as qword (uint64).
 - /oa \<data\> as ascii text.
 - /ou \<data\> as unicode (utf-16) text.
-- /of Output data is read as binary data from the file <path>.
-- /or Output data will be filled with <size> random bytes.
-- /op Output data will be filled with <size> default pattern bytes (Aa0Aa1...).
-- /opc Output data will be filled with <size> custom pattern bytes, starting from <pattern>, incremented by 1.
-
+- /of Output data is read as binary data from the file \<path\>.
+- /or Output data will be filled with \<size\> random bytes.
+- /op Output data will be filled with \<size\> default pattern bytes (Aa0Aa1...).
+- /opc Output data will be filled with \<size\> custom pattern bytes, starting from \<pattern\>, incremented by 1.
 
 **Other**
 - /s Duration of a possible sleep after device io.
@@ -100,8 +101,6 @@ $ Talk.exe /n DeviceName
 - /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x10) times for multiple privileges.
 - /fobp Force printing of the output buffer, even in an error case.
 - /oboa Page align the output buffer, so that it ends 0x10 bytes into its last page, to survive an overflow within the page.
-- /ibfb Fill byte value for the input buffer. Default 0x41.
-- /obfb Fill byte value for the output buffer. Default 0x0.
 
 **Printing style for output buffer**
 - /pb Print plain space separated bytes
@@ -131,9 +130,22 @@ The order the integers are given in does matter.
 The custom `<pattern>` of `/ipc` (`/opc`) is interpreted as a byte string, 
   i.e. the input of `/ipc 414243 10` will result to a 10 byte long input data of `41 42 43 41 42 44 41 42 45 41`.
 
-The `/oboa` page aligns the output buffer, so that it ends 0x10 bytes into its last page.
+Using `/oboa` page aligns the output buffer, so that it ends 0x10 bytes into its last page.
 By leaving `0x1000 - 0x10 = 0xff0` writable bytes behind the buffer on the same page, 
   it maximizes the possibility to survive an overflow without crossing a page boundary.
+
+Since with `METHOD_NEITHER`, and `METHOD_OUT_DIRECT` the `iosb.Information` is not reliable,
+  if `iosb.Information` is 0, the output buffer is printed using its provided size.
+If `iosb.Information` is greater than 0, the `iosb.Information` is used.
+
+The `/fobp` forces printing of the output buffer, even if the device control call returns an error.
+It will print the whole provided output buffer and not just what `iosb.Information` states.
+In the cases of `METHOD_NEITHER`, and `METHOD_OUT_DIRECT` the `iosb.Information` is not reliable anyway.
+Further, if fast IO is used, which can't be easily detected in user mode, 
+  even `METHOD_BUFFERED` ioctls use neither IO and `iosb.Information` is also not reliable.
+
+Unicode printing with `/pu` or `pc16` just supports the ASCII range due to simplicity and security reasons.
+Maybe an option is added in the future to opt in for some more range to be printable.
 
 
 ### Examples

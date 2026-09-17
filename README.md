@@ -3,6 +3,9 @@
 Talks to a device using NtDeviceIoControl.
 Arbitrary devices can be called with arbitrary ioctls and buffers to test functionality or else.
 
+Input and output buffers can be initialized in multiple ways.
+The possibilities range from plain buffers filled with an initial value, via complex structs, patterns to binary file blobs.
+
 
 ## Version
 2.2.9  
@@ -58,7 +61,6 @@ $ Talk.exe /n DeviceName
 **Options**
 - /n DeviceName to call. I.e. "\Device\Beep"
 - /c The desired IOCTL interpreted as a hex number.
-- /os Size of OutputBuffer.
 
 **Input Data**  
 (The integer types are [chainable](#remarks).)  
@@ -96,11 +98,11 @@ $ Talk.exe /n DeviceName
 **Other**
 - /s Duration of a possible sleep after device io.
 - /t Just test the device for accessibility. Don't send data.
-- /da DesiredAccess flags to open the device. Defaults to FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x12019f
-- /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x3
+- /da DesiredAccess flags to open the device. Defaults to `FILE_GENERIC_READ|FILE_GENERIC_WRITE|SYNCHRONIZE = 0x12019f`.
+- /sa ShareAccess flags to open the device. Defaults to `FILE_SHARE_READ|FILE_SHARE_WRITE = 0x3`.
 - /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x10) times for multiple privileges.
 - /fobp Force printing of the output buffer, even in an error case.
-- /oboa Page align the output buffer, so that it ends 0x10 bytes into its last page, to survive an overflow within the page.
+- /oboa Page align the output buffer, so that it ends max 0x10 bytes into its last page, to possibly survive an overflow within the page.
 
 **Printing style for output buffer**
 - /pb Print plain space separated bytes

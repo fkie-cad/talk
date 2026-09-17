@@ -50,11 +50,16 @@ SIZE_T getBufferOffset(SIZE_T Size, SIZE_T LastPageBytes)
 }
 
 //
-// allocate page aligned buffer.
-// The buffer reaches max LastPageBytes bytes into a new page.
+// Allocate special overflow aligned buffer.
+// The buffer reaches max LastPageBytes bytes into its last occupied page.
 // This should maximize the amount of memory accessible beyond the buffer not crossing a page border.
 //
-PVOID allocCMPL(SIZE_T Size, PVOID* Base, SIZE_T LastPageBytes)
+// @Param Size SIZE_T The desired buffer size
+// @Param Base PVOID Out param with the allocated region base. Has be used to NtFreeVirtualMemory.
+// @Param LastPageBytes SIZE_T Number of bytes the last pages max occupies.
+// @Return PVOID The Buffer address.
+//
+PVOID allocOverflowAlignedBuffer(_In_ SIZE_T Size, _Out_ PVOID* Base, _In_ SIZE_T LastPageBytes)
 {
     FEnter();
 

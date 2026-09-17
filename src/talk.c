@@ -957,7 +957,7 @@ INT parseArgs(_In_ INT argc, _In_ CHAR** argv, _Out_ CmdParams* Params)
         PVOID base = NULL;
         PVOID buffer = NULL;
         DPrint("realigning buffer: %p\n", Params->OutputBufferData);
-        buffer = allocCMPL(Params->OutputBufferSize, &base, MAX_LAST_PAGE_BYTES);
+        buffer = allocOverflowAlignedBuffer(Params->OutputBufferSize, &base, MAX_LAST_PAGE_BYTES);
         if ( !buffer )
         {
             s = ERROR_NO_SYSTEM_RESOURCES;
@@ -1106,6 +1106,8 @@ void printHelp()
     printf(" - /c The desired IOCTL in hex.\n");
     printf(" - Input Data:\n");
     printf("    (The integer types are chainable.)\n");
+    printf("    * /is Input data will be filled with <size> 0x41 or another fill byte (/ibfb).\n");
+    printf("    * /ibfb Fill byte value for the input buffer. Default 0x%x.\n", DEFAULT_IB_FILL_BYTE);
     printf("    * /ix <Data> as hex byte string (e.g. B50DC0DE).\n");
     printf("    * /ib <Data> as byte.\n");
     printf("    * /iw <Data> as word (uint16).\n");
@@ -1117,11 +1119,11 @@ void printHelp()
     printf("    * /ir Input data will be filled with <size> random bytes.\n");
     printf("    * /ip Input data will be filled with <size> default pattern bytes (Aa0Aa1...).\n");
     printf("    * /ipc Input data will be filled with <size> custom pattern bytes, starting from <pattern>, incremented by 1.\n");
-    printf("    * /is Input data will be filled with <size> 0x41 or another fill byte (/ibfb).\n");
     printf(" - Output Data:\n");
     printf("    (Sometimes the output buffer might need to be filled as well.)\n");
     printf("    (The integer types are chainable.)\n");
     printf("    * /os Size of OutputBuffer to be filled with <size> 0 or another fill byte (/obfb).\n");
+    printf("    * /obfb Fill byte value for the output buffer. Default 0x%x.\n", DEFAULT_OB_FILL_BYTE);
     printf("    * /ox <Data> as hex byte string (e.g. BEADC0DE).\n");
     printf("    * /ob <Data> as byte.\n");
     printf("    * /ow <Data> as word (uint16).\n");
@@ -1139,9 +1141,7 @@ void printHelp()
     printf(" - /sa ShareAccess flags to open the device. Defaults to FILE_SHARE_READ|FILE_SHARE_WRITE = 0x%x.\n", DEFAULT_SA);
     printf(" - /se Additional SE_XXX privilege (if run as admin). Can be set multiple (0x%x) times for multiple privileges.\n", MAX_SE_COUNT);
     printf(" - /fobp Force printing of the output buffer, even in an error case.\n");
-    printf(" - /oboa Page align the output buffer, so that it ends 0x%x bytes into its last page, to survive an overflow within the page.\n", MAX_LAST_PAGE_BYTES);
-    printf(" - /ibfb Fill byte value for the input buffer. Default 0x%x.\n", DEFAULT_IB_FILL_BYTE);
-    printf(" - /obfb Fill byte value for the output buffer. Default 0x%x.\n", DEFAULT_OB_FILL_BYTE);
+    printf(" - /oboa Page align the output buffer, so that it ends max 0x%x bytes into its last page, to possibly survive an overflow within the page.\n", MAX_LAST_PAGE_BYTES);
     printf(" - Printing style for output buffer:\n");
     printf("    * /pb Print in plain space separated bytes.\n");
     printf("    * /pbs Print in plain byte string.\n");

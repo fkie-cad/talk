@@ -23,8 +23,8 @@
 
 
 #define BIN_NAME "Talk"
-#define VERSION "2.2.9"
-#define LAST_CHANGED "16.09.2026"
+#define VERSION "2.2.10"
+#define LAST_CHANGED "18.09.2026"
 
 
 #define PRINT_MODE_NONE         (0x00) // 0000
@@ -312,20 +312,14 @@ int generateIoRequest(_In_ HANDLE Device, _In_ PCmdParams Params)
     }
     
     SIZE_T toPrint = 0;
-    UINT32 method = METHOD_FROM_CTL_CODE(Params->IoCtl);
-    DPrint("method: 0x%x\n", method);
-    // use output buffer size, because 
-    // - iosb.Information is not reliable, 
-    // - or not filled at all,
-    // - or we are forced to.
-    if ( ( bytesReturned == 0 && ( method == METHOD_NEITHER || method == METHOD_OUT_DIRECT )) || Params->Flags.ForceOutputBufferPrint )
+
+    // use output buffer size, because we are forced to.
+    if ( Params->Flags.ForceOutputBufferPrint )
     {
         toPrint = Params->OutputBufferSize;
     }
     else
     {
-        // for buffered io, iosb.Information is the only possible buffer size
-        // if not fastio is used
         toPrint = bytesReturned;
     }
     DPrint("Params->OutputBufferSize: 0x%x\n", Params->OutputBufferSize);

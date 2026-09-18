@@ -1,10 +1,15 @@
 # Change Log
 
 
+## v2.2.10 - 2026/09/18
+- Output buffer printing size on success and warning always set to iosb.Information. 
+  If forced (/fobp) it's always set to output buffer size.
+
+
 ## v2.2.9 - 2026/09/15
 - Fixed output buffer printing size bug.
 - Forced `/fobp` to always print the output buffer by its size, not using `iosb.Information`.
-- Refactoring
+- Refactoring.
 
 ## v2.2.8 - 2026/09/15
 

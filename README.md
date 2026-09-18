@@ -8,8 +8,8 @@ The possibilities range from plain buffers filled with an initial value, via com
 
 
 ## Version
-2.2.9  
-Last changed: 16.09.2026
+2.2.10  
+Last changed: 18.09.2026
 
 ## Contents
 * [Requirements](#requirements)
@@ -28,12 +28,12 @@ Last changed: 16.09.2026
 ```bash
 $devcmd> build.bat [/?]
 // or
-$devcmd> msbuild talk.vcxproj /p:Platform=x64 /p:Configuration=Release
+$devcmd> msbuild talk.vcxproj /p:Platform=x64 /p:Configuration=Release /p:ErrorPrint=1
 ```
 
 **other options**
 ```bash
-$devcmd> msbuild [talk.vcxproj] [/p:Platform=x86|x64] [/p:Configuration=Debug|Release] [/p:RunTimeLib=Debug|Release] [/p:PDB=0|1]
+$devcmd> msbuild [talk.vcxproj] [/p:Platform=x86|x64] [/p:Configuration=Debug|Release] [/p:PlatformToolSet=...] [/p:RunTimeLib=Debug|Release] [/p:PDB=0|1] [/p:ErrorPrint=0|1] [/p:DebugPrint=0|1]
 ```
 
 ## Usage
@@ -135,10 +135,6 @@ The custom `<pattern>` of `/ipc` (`/opc`) is interpreted as a byte string,
 Using `/oboa` page aligns the output buffer, so that it ends 0x10 bytes into its last page.
 By leaving `0x1000 - 0x10 = 0xff0` writable bytes behind the buffer on the same page, 
   it maximizes the possibility to survive an overflow without crossing a page boundary.
-
-Since with `METHOD_NEITHER`, and `METHOD_OUT_DIRECT` the `iosb.Information` is not reliable,
-  if `iosb.Information` is 0, the output buffer is printed using its provided size.
-If `iosb.Information` is greater than 0, the `iosb.Information` is used.
 
 The `/fobp` forces printing of the output buffer, even if the device control call returns an error.
 It will print the whole provided output buffer and not just what `iosb.Information` states.

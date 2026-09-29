@@ -8,8 +8,8 @@ The possibilities range from plain buffers filled with an initial value, via com
 
 
 ## Version
-2.2.10  
-Last changed: 18.09.2026
+2.2.11  
+Last changed: 29.09.2026
 
 ## Contents
 * [Requirements](#requirements)

@@ -1,12 +1,15 @@
 #pragma once
 
+#include <stdint.h>
+
+#define MAX_COLS_16_GAP (8*5)
 
 #define HEX_CHAR_WIDTH(__hcw_v__, __hcw_w__) \
 { \
-    UINT8 _hcw_w_ = 0x10; \
-    for ( UINT8 _i_ = 0x38; _i_ > 0; _i_-=8 ) \
+    uint8_t _hcw_w_ = 0x10; \
+    for ( uint8_t _i_ = 0x38; _i_ > 0; _i_-=8 ) \
     { \
-        if ( ! ((UINT8)(__hcw_v__ >> _i_)) ) \
+        if ( ! ((uint8_t)(__hcw_v__ >> _i_)) ) \
             _hcw_w_ -= 2; \
         else \
             break; \
@@ -17,7 +20,7 @@
 //
 // stick to ASCII only for safety and simplicity
 //
-static inline void putPrintableA(UINT8 c)
+static inline void putPrintableA(uint8_t c)
 {
     putchar(( c >= 0x20 && c <= 0x7E ) ? (CHAR)c : '.');
 }
@@ -25,7 +28,7 @@ static inline void putPrintableA(UINT8 c)
 //
 // stick to ASCII only for safety and simplicity
 //
-static inline void putPrintableW(UINT16 wc)
+static inline void putPrintableW(uint16_t wc)
 {
     putchar(( wc >= 0x20 && wc <= 0x7E ) ? (CHAR)wc : '.');
 }
@@ -34,30 +37,54 @@ static inline void putPrintableW(UINT16 wc)
 #define DPrint(...) \
                 printf(__VA_ARGS__);
 #define FEnter() \
-                printf("[>] %s()\n", __FUNCTION__);
+                printf("[>] %s()\n", __func__);
 #define FLeave() \
-                printf("[<] %s()\n", __FUNCTION__);
+                printf("[<] %s()\n", __func__);
 
-#define DPrintMemCols32(b, s, _a_) \
-{\
-    UINT64 _hw_v_ = (UINT64)_a_ + s; \
-    UINT8 _hw_w_ = 0x10; \
-    UINT64 _s_cpy_ = s; \
-    HEX_CHAR_WIDTH(_hw_v_, _hw_w_); \
-    \
-    if ( _s_cpy_ % 4 != 0 ) _s_cpy_ = _s_cpy_ - (_s_cpy_ % 4); \
-    \
-    for ( UINT64 _i_ = 0; _i_ < _s_cpy_; _i_+=0x10 ) \
-    { \
-        UINT64 _end_ = (_i_+0x10<_s_cpy_)?(_i_+0x10):(_s_cpy_); \
-        printf("%.*zx  ", _hw_w_, (((UINT64)_a_)+_i_)); \
-         \
-        for ( UINT64 _j_ = _i_; _j_ < _end_; _j_+=4 ) \
-        { \
-            printf("%08x ", *(PUINT32)&(((PUINT8)b)[_j_])); \
-        } \
-        printf("\n"); \
-    } \
+FORCEINLINE
+void DPrintMemCols32(PVOID buffer, SIZE_T size, uint64_t addr)
+{
+    uint8_t hw = 0x10;
+    HEX_CHAR_WIDTH((addr + size), hw);
+
+    uint8_t* p = (uint8_t*)buffer;
+    uint64_t full = size & ~(uint64_t)0xF; // bytes in complete 16-byte rows
+    uint64_t tail = size & 0xF; // leftover bytes (0..15)
+
+    uint64_t i;
+    for ( i = 0; i < full; i += 0x10 )
+    {
+        uint32_t d0, d1, d2, d3;
+        d0 = *(uint32_t*)&p[i];
+        d1 = *(uint32_t*)&p[i+ 4];
+        d2 = *(uint32_t*)&p[i+ 8];
+        d3 = *(uint32_t*)&p[i+ 12];
+        //memcpy(&d0, p + i, 4);
+        //memcpy(&d1, p + i + 4, 4);
+        //memcpy(&d2, p + i + 8, 4);
+        //memcpy(&d3, p + i + 12, 4);
+        printf("%.*zx  %08x %08x %08x %08x\n",
+            hw, (size_t)(addr + i), d0, d1, d2, d3);
+    }
+    if ( tail )
+    {
+        printf("%.*zx ", hw, (size_t)(addr + i));
+        uint64_t off = 0;
+        for ( ; off + 4 <= tail; off += 4 ) // full 4-byte chunks
+        {
+            uint32_t d;
+            d = *(uint32_t*)&p[i + off];
+            //memcpy(&d, p + i + off, 4);
+            printf(" %08x", d);
+        }
+        if ( off < tail ) // final 1..3 bytes
+        {
+            uint32_t d = 0;
+            memcpy(&d, p + i + off, (size_t)(tail - off));
+            printf(" %08x", d);
+        }
+        putchar('\n');
+    }
 }
 #else
 #define DPrint(...)
@@ -79,19 +106,19 @@ static inline void putPrintableW(UINT16 wc)
 FORCEINLINE
 void PrintMemCols8(PVOID _b_, SIZE_T _s_, SIZE_T _a_)
 {
-    UINT64 _hw_v_ = (UINT64)_a_ + _s_;
-    UINT8 _hw_w_ = 0x10;
+    uint64_t _hw_v_ = (uint64_t)_a_ + _s_;
+    uint8_t _hw_w_ = 0x10;
     HEX_CHAR_WIDTH(_hw_v_, _hw_w_);
    
-    for ( UINT64 _i_ = 0; _i_ < _s_; _i_+=0x10 )
+    for ( uint64_t _i_ = 0; _i_ < _s_; _i_+=0x10 )
     {
-        UINT64 _end_ = (_i_+0x10<_s_) ? (_i_+0x10) : (_s_);
+        uint64_t _end_ = (_i_+0x10<_s_) ? (_i_+0x10) : (_s_);
         ULONG _gap_ = (_i_+0x10<=_s_) ? 0 : (ULONG)((0x10+_i_-_s_)*3);
-        printf("%.*zx  ", _hw_w_, (((UINT64)_a_)+_i_));
+        printf("%.*zx  ", _hw_w_, (((uint64_t)_a_)+_i_));
         
-        for ( UINT64 _j_ = _i_, _k_=0; _j_ < _end_; _j_++, _k_++ )
+        for ( uint64_t _j_ = _i_, _k_=0; _j_ < _end_; _j_++, _k_++ )
         {
-            printf("%02x", ((PUINT8)_b_)[_j_]);
+            printf("%02x", ((uint8_t*)_b_)[_j_]);
             printf("%c", (_k_==7?'-':' '));
         }
         for ( ULONG _j_ = 0; _j_ < _gap_; _j_++ )
@@ -99,100 +126,175 @@ void PrintMemCols8(PVOID _b_, SIZE_T _s_, SIZE_T _a_)
             printf(" ");
         }
         printf("  ");
-        for ( UINT64 _k_ = _i_; _k_ < _end_; _k_++ )
+        for ( uint64_t _k_ = _i_; _k_ < _end_; _k_++ )
         {
-            putPrintableA(((PUINT8)_b_)[_k_]);
+            putPrintableA(((uint8_t*)_b_)[_k_]);
         }
         printf("\n");
     }
 }
 
 FORCEINLINE
-void PrintMemCols16(PVOID _b_, SIZE_T _s_, UINT64 _a_)
+void PrintMemCols16(PVOID buffer, SIZE_T size, uint64_t addr)
 {
-    UINT64 _hw_v_ = (UINT64)_a_ + _s_;
-    UINT8 _hw_w_ = 0x10;
-    UINT64 _s_cpy_ = _s_;
-    HEX_CHAR_WIDTH(_hw_v_, _hw_w_);
-   
-    if ( _s_cpy_ % 2 != 0 ) _s_cpy_ = _s_cpy_ - 1;
-   
-    for ( UINT64 _i_ = 0; _i_ < _s_cpy_; _i_+=0x10 )
+    uint8_t hw = 0x10;
+    HEX_CHAR_WIDTH((addr + size), hw);
+
+    uint8_t* p = (uint8_t*)buffer;
+    uint64_t full = size & ~(uint64_t)0xF; // bytes in complete 16-byte rows
+    uint32_t tail = size & 0xF; // leftover bytes (0..15)
+
+    uint64_t i;
+    for ( i = 0; i < full; i += 0x10 )
     {
-        UINT64 _end_ = (_i_+0x10<_s_cpy_)?(_i_+0x10):(_s_cpy_);
-        ULONG _gap_ = (_i_+0x10<=_s_cpy_) ? 0 : (ULONG)((0x10+_i_-_s_cpy_)/2*5);
-        printf("%.*zx  ", _hw_w_, (((UINT64)_a_)+_i_));
-        
-        for ( UINT64 _j_ = _i_; _j_ < _end_; _j_+=2 )
+        printf("%.*zx ", hw, (size_t)(addr + i));
+        uint16_t w[8] = { 0 };
+
+        for ( uint8_t wi = 0; wi < 8; wi++ )
         {
-            printf("%04x ", *(PUINT16)&(((PUINT8)_b_)[_j_]));
-        }
-        for ( ULONG _j_ = 0; _j_ < _gap_; _j_++ )
-        {
-            printf(" ");
+            w[wi] = *(uint16_t*)&p[i + wi*2];
+            // memcpy(&w[wi], p + i + wi*2, 2);
+            printf(" %04x", w[wi]);
         }
         printf("  ");
-        for ( UINT64 _j_ = _i_; _j_ < _end_; _j_+=2 )
+        for ( uint8_t wi = 0; wi < 8; wi++ )
         {
-            putPrintableW(*(PUINT16)&(((PUINT8)_b_)[_j_]));
+            putPrintableW(w[wi]);
         }
         printf("\n");
     }
-}
 
-FORCEINLINE
-void PrintMemCols32(PVOID _b_, SIZE_T _s_, UINT64 _a_)
-{
-    UINT64 _hw_v_ = (UINT64)_a_ + _s_;
-    UINT8 _hw_w_ = 0x10;
-    UINT64 _s_cpy_ = _s_;
-    HEX_CHAR_WIDTH(_hw_v_, _hw_w_);
-   
-    if ( _s_cpy_ % 4 != 0 ) _s_cpy_ = _s_cpy_ - (_s_cpy_ % 4);
-   
-    for ( UINT64 _i_ = 0; _i_ < _s_cpy_; _i_+=0x10 )
+    if ( tail )
     {
-        UINT64 _end_ = (_i_+0x10<_s_cpy_)?(_i_+0x10):(_s_cpy_);
-        printf("%.*zx  ", _hw_w_, (((UINT64)_a_)+_i_));
-        
-        for ( UINT64 _j_ = _i_; _j_ < _end_; _j_+=4 )
+        printf("%.*zx ", hw, (size_t)(addr + i));
+        uint32_t off = 0;
+        uint16_t w[8] = { 0 };
+        uint8_t wi = 0;
+        for ( ; off + 2 <= tail; off += 2, wi++ ) // full 2-byte chunks
         {
-            printf("%08x ", *(PUINT32)&(((PUINT8)_b_)[_j_]));
+            w[wi] = *(uint16_t*)&p[i + off];
+            // memcpy(&w[wi], p + i + off, 2);
+            printf(" %04x", w[wi]);
         }
-        printf("\n");
+        if ( off < tail ) // final 1 byte
+        {
+            w[wi] = p[i + off];
+            //memcpy(&w[wi], p + i + off, (size_t)(tail - off));
+            printf(" %04x", w[wi]);
+            wi++;
+        }
+        
+        uint32_t aligned_tail = (tail + 1) & ~1u;
+        uint32_t gap = 2 + MAX_COLS_16_GAP - ((aligned_tail/2) * 5);
+        for ( uint32_t gi = 0; gi < gap; gi++ )
+            printf(" ");
+        
+        off = 0;
+        uint8_t w_size = wi;
+        for ( wi = 0; wi < w_size; wi++ )
+        {
+            putPrintableW(w[wi]);
+        }
+        putchar('\n');
     }
 }
 
 FORCEINLINE
-void PrintMemCols64(PVOID _b_, SIZE_T _s_, UINT64 _a_)
+void PrintMemCols32(PVOID buffer, SIZE_T size, uint64_t addr)
 {
-    UINT64 _hw_v_ = (UINT64)_a_ + _s_;
-    UINT8 _hw_w_ = 0x10;
-    UINT64 _s_cpy_ = _s_;
-    HEX_CHAR_WIDTH(_hw_v_, _hw_w_);
-   
-    if ( _s_cpy_ % 8 != 0 ) _s_cpy_ = _s_cpy_ - (_s_cpy_ % 8);
-   
-    for ( UINT64 _i_ = 0; _i_ < _s_cpy_; _i_+=0x10 )
+    uint8_t hw = 0x10;
+    HEX_CHAR_WIDTH((addr + size), hw);
+
+    uint8_t* p = (uint8_t*)buffer;
+    uint64_t full = size & ~(uint64_t)0xF; // bytes in complete 16-byte rows
+    uint64_t tail = size & 0xF; // leftover bytes (0..15)
+
+    uint64_t i;
+    for ( i = 0; i < full; i += 0x10 )
     {
-        UINT64 _end_ = (_i_+0x10<_s_cpy_)?(_i_+0x10):(_s_cpy_);
-        printf("%.*zx  ", _hw_w_, (((UINT64)_a_)+_i_));
-        
-        for ( UINT64 _j_ = _i_; _j_ < _end_; _j_+=8 )
+        uint32_t d0, d1, d2, d3;
+        d0 = *(uint32_t*)&p[i];
+        d1 = *(uint32_t*)&p[i+ 4];
+        d2 = *(uint32_t*)&p[i+ 8];
+        d3 = *(uint32_t*)&p[i+ 12];
+        //memcpy(&d0, p + i, 4);
+        //memcpy(&d1, p + i + 4, 4);
+        //memcpy(&d2, p + i + 8, 4);
+        //memcpy(&d3, p + i + 12, 4);
+        printf("%.*zx  %08x %08x %08x %08x\n",
+            hw, (size_t)(addr + i), d0, d1, d2, d3);
+    }
+    if ( tail )
+    {
+        printf("%.*zx ", hw, (size_t)(addr + i));
+        uint64_t off = 0;
+        for ( ; off + 4 <= tail; off += 4 ) // full 4-byte chunks
         {
-            printf("%016llx ", *(PUINT64)&(((PUINT8)_b_)[_j_]));
+            uint32_t d;
+            d = *(uint32_t*)&p[i + off];
+            //memcpy(&d, p + i + off, 4);
+            printf(" %08x", d);
         }
-        printf("\n");
+        if ( off < tail ) // final 1..3 bytes
+        {
+            uint32_t d = 0;
+            memcpy(&d, p + i + off, (size_t)(tail - off));
+            printf(" %08x", d);
+        }
+        putchar('\n');
     }
 }
 
 FORCEINLINE
-void PrintMemColsBits(PVOID _b_, SIZE_T _s_, UINT64 _o_)
+void PrintMemCols64(PVOID buffer, SIZE_T size, uint64_t addr)
 {
-    UINT64 _hw_v_ = (SIZE_T)_o_ + (SIZE_T)_s_;
-    UINT8 _hw_w_ = 0x10;
-    UINT8 _bytes_per_col = 8;
-    UINT64 _s_cpy_ = _s_;
+    uint8_t hw = 0x10;
+    HEX_CHAR_WIDTH((addr + size), hw);
+
+    uint8_t* p = (uint8_t*)buffer;
+    uint64_t full = size & ~(uint64_t)0xF; // bytes in complete 16-byte rows
+    uint64_t tail = size & 0xF; // leftover bytes (0..15)
+
+    uint64_t i;
+    for ( i = 0; i < full; i += 0x10 )
+    {
+        uint64_t q0, q1;
+        q0 = *(uint64_t*)&p[i];
+        q1 = *(uint64_t*)&p[i+ 8];
+        //memcpy(&q0, p + i, 8);
+        //memcpy(&q1, p + i + 8, 8);
+        printf("%.*zx  %016llx %016llx\n",
+            hw, (size_t)(addr + i), q0, q1);
+    }
+
+    if ( tail )
+    {
+        printf("%.*zx ", hw, (size_t)(addr + i));
+        uint64_t off = 0;
+        for ( ; off + 8 <= tail; off += 8 ) // full 8-byte chunks
+        {
+            uint64_t q;
+            q = *(uint64_t*)&p[i+ off];
+            //memcpy(&q, p + i + off, 8);
+            printf(" %016llx", q);
+        }
+        if ( off < tail ) // final 1..7 bytes
+        {
+            uint64_t q = 0;
+            memcpy(&q, p + i + off, (size_t)(tail - off));
+            printf(" %016llx", q);
+        }
+        putchar('\n');
+    }
+}
+
+FORCEINLINE
+void PrintMemColsBits(PVOID _b_, SIZE_T _s_, uint64_t _o_)
+{
+    uint64_t _hw_v_ = (SIZE_T)_o_ + (SIZE_T)_s_;
+    uint8_t _hw_w_ = 0x10;
+    uint8_t _bytes_per_col = 8;
+    uint64_t _s_cpy_ = _s_;
     HEX_CHAR_WIDTH(_hw_v_, _hw_w_);
    
     for ( SIZE_T _i_ = 0; _i_ < (SIZE_T)_s_cpy_; _i_+=_bytes_per_col )
@@ -202,7 +304,7 @@ void PrintMemColsBits(PVOID _b_, SIZE_T _s_, UINT64 _o_)
         
         for ( SIZE_T _bi_ = _i_; _bi_ < _end_; _bi_++ )
         {
-            UINT8 _n_ = ((PUINT8)_b_)[_bi_];
+            uint8_t _n_ = ((uint8_t*)_b_)[_bi_];
             for ( INT _j_ = 7; _j_ >= 0; _j_-- )
             {
                 if ( ( (_n_ >> _j_) & 1 ) )
@@ -226,18 +328,18 @@ void PrintMemColsBits(PVOID _b_, SIZE_T _s_, UINT64 _o_)
 FORCEINLINE
 void PrintMemBytes(PVOID _b_, SIZE_T _s_)
 {
-    for ( UINT64 _i_ = 0; _i_ < _s_; _i_++ )
+    for ( uint64_t _i_ = 0; _i_ < _s_; _i_++ )
     {
-        printf("%02x ", ((PUINT8)_b_)[_i_]);
+        printf("%02x ", ((uint8_t*)_b_)[_i_]);
     }
 }
 
 FORCEINLINE
 void PrintMemByteStr(PVOID _b_, SIZE_T _s_)
 {
-    for ( UINT64 _i_ = 0; _i_ < _s_; _i_++ )
+    for ( uint64_t _i_ = 0; _i_ < _s_; _i_++ )
     {
-        printf("%02x", ((PUINT8)_b_)[_i_]);
+        printf("%02x", ((uint8_t*)_b_)[_i_]);
     }
 }
 
@@ -246,7 +348,7 @@ void PrintAStr(PVOID b, SIZE_T s)
 {
     for ( SIZE_T k = 0; k < s; k++ )
     {
-        putPrintableA(((PUINT8)b)[k]);
+        putPrintableA(((uint8_t*)b)[k]);
     }
     printf("\n");
 }
@@ -257,7 +359,7 @@ void PrintWStr(PVOID b, SIZE_T s)
     SIZE_T n = s / 2;
     for ( SIZE_T k = 0; k < n; k++ )
     {
-        putPrintableW(*(PUINT16)&(((PUINT8)b)[k * 2]));
+        putPrintableW(*(uint16_t*)&(((uint8_t*)b)[k * 2]));
     }
     printf("\n");
 }

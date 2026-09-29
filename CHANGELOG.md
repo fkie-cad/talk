@@ -1,6 +1,10 @@
 # Change Log
 
 
+## v2.2.11 - 2026/09/29
+- Printing full output buffer for 16-bit (`/pc16`), 32-bit (`/pc32`) and 64-bit (`/pc64`) printing styles by 0-padding any unaligned remainder.
+  Previously, the output was truncated to byte alignment.
+
 ## v2.2.10 - 2026/09/18
 - Output buffer printing size on success and warning always set to iosb.Information. 
   If forced (/fobp) it's always set to output buffer size.

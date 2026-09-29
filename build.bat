@@ -23,6 +23,7 @@ set platform=x64
 set configuration=Debug
 
 set pts=v145
+:: set pts=WindowsApplicationForDrivers10.0
 
 set prog_proj=talk.vcxproj
 

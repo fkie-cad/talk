@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Release|Win32">
@@ -30,7 +30,8 @@
     <TargetVersion>Windows10</TargetVersion>
     <TargetPlatform>Desktop</TargetPlatform>
     <!--<DriverTargetPlatform>Desktop</DriverTargetPlatform>-->
-    <PlatformToolset>WindowsApplicationForDrivers10.0</PlatformToolset> <!-- smaller build than v142 -->
+    <PlatformToolset>v145</PlatformToolset>
+    <!-- <PlatformToolset>WindowsApplicationForDrivers10.0</PlatformToolset> -->
     <ConfigurationType>Application</ConfigurationType>
   </PropertyGroup>
   <PropertyGroup Label="Configuration" Condition="'$(Configuration)'=='Release'">
@@ -85,7 +86,7 @@
       <!--<FunctionLevelLinking>true</FunctionLevelLinking>-->
       <!--<IntrinsicFunctions>true</IntrinsicFunctions>-->
       <!--<PreprocessorDefinitions>%(PreprocessorDefinitions)</PreprocessorDefinitions>-->
-      <!--<LanguageStandard>c99</LanguageStandard>-->
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/GS %(AdditionalOptions)</AdditionalOptions>
       <GuardCF>true</GuardCF>
     </ClCompile>
